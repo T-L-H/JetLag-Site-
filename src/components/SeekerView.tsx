@@ -728,7 +728,7 @@ export default function SeekerView({
 
         {/* BOTTOM FLOATING PARAMETER / FORM OVERLAY */}
         {!hasCurse && !hasActiveQuestion && ((qType !== null && mobileActiveTab === 'ASK') || (mobileActiveTab === 'STATUS' && qType === null)) && !previewingQuestion && (
-          <div className="absolute bottom-6 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1020] text-left animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="absolute bottom-20 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1020] text-left animate-in fade-in slide-in-from-bottom-4 duration-200">
             {/* Header */}
             <div className="flex justify-between items-center pb-2 border-b border-slate-900 shrink-0">
               <div>
@@ -1112,7 +1112,7 @@ export default function SeekerView({
 
         {/* BOTTOM FLOATING CONFIRM ASKING OVERLAY */}
         {!hasCurse && !hasActiveQuestion && previewingQuestion && (
-          <div className="absolute bottom-6 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-cyan-500 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1030] text-center animate-in fade-in zoom-in-95 duration-200">
+          <div className="absolute bottom-20 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-cyan-500 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1030] text-center animate-in fade-in zoom-in-95 duration-200">
             <div className="p-2 bg-cyan-500/10 rounded-full text-cyan-400 w-fit mx-auto shrink-0 animate-bounce">
               <Compass className="w-5 h-5" />
             </div>
@@ -1152,7 +1152,7 @@ export default function SeekerView({
 
         {/* ACTIVE QUESTION OVERLAY FOR MOBILE */}
         {!hasCurse && hasActiveQuestion && (
-          <div className="absolute bottom-6 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1040] text-left animate-in fade-in slide-in-from-bottom-4 duration-200 font-sans">
+          <div className="absolute bottom-20 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1040] text-left animate-in fade-in slide-in-from-bottom-4 duration-200 font-sans">
             <div className="flex justify-between items-center pb-2 border-b border-slate-900 shrink-0">
               <div>
                 <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">PENDING RESOLUTION</span>
@@ -1179,11 +1179,16 @@ export default function SeekerView({
                       <a
                         href={room.activeQuestion.photoUrl}
                         download={`jetlag_photo_${room.activeQuestion.selectedSubject?.replace(/\s+/g, '_')}.png`}
-                        className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black rounded-lg shadow inline-flex items-center justify-center space-x-1 transition-transform"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-2 bg-amber-500 hover:bg-amber-400 active:scale-[0.97] text-slate-950 text-[10px] font-black rounded-lg shadow inline-flex items-center justify-center space-x-1.5 transition-all uppercase tracking-wider font-sans"
                       >
                         <Image className="w-3.5 h-3.5" />
                         <span>Save Photo</span>
                       </a>
+                      <p className="text-[8px] text-slate-400 text-center leading-normal mt-1 font-medium italic">
+                        Tip: If download doesn't start, long-press the photo above to choose "Save to Photos".
+                      </p>
                     </div>
                   )}
 
@@ -1217,7 +1222,7 @@ export default function SeekerView({
                   onClearQuestion();
                   audio.playClick();
                 }}
-                className="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl shadow cursor-pointer uppercase tracking-wider font-sans"
+                className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 active:scale-[0.97] text-slate-950 text-xs font-black rounded-xl shadow cursor-pointer uppercase tracking-wider font-sans transition-all"
               >
                 Close & Ask New Question
               </button>
@@ -1227,7 +1232,7 @@ export default function SeekerView({
 
         {/* ACTIVE CURSES OVERLAY FOR MOBILE */}
         {hasCurse && (
-          <div className="absolute bottom-6 left-3 right-3 max-w-sm mx-auto bg-rose-955/85 backdrop-blur-md border border-rose-500/40 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1040] text-left animate-in fade-in slide-in-from-bottom-4 duration-200 font-sans">
+          <div className="absolute bottom-20 left-3 right-3 max-w-sm mx-auto bg-rose-955/85 backdrop-blur-md border border-rose-500/40 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1040] text-left animate-in fade-in slide-in-from-bottom-4 duration-200 font-sans">
             <div className="flex justify-between items-center pb-2 border-b border-rose-950/40 shrink-0">
               <div>
                 <span className="text-[9px] font-black uppercase tracking-wider text-rose-400">CURSE OF THE HIDERS ACTIVE</span>

@@ -762,7 +762,7 @@ export default function App() {
 
               {/* Floating "Show Controls" toggle on Mobile when hidden */}
               {!showMobileControls && !(room.gamePhase === 'SEEKING' && !isHider) && (
-                <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[3000] flex flex-col items-center space-y-3 w-[calc(100%-2rem)] max-w-sm">
+                <div className="md:hidden absolute bottom-20 left-1/2 -translate-x-1/2 z-[3000] flex flex-col items-center space-y-3 w-[calc(100%-2rem)] max-w-sm">
                   {/* Big Notification Alert banner */}
                   {(() => {
                     const notif = getActiveNotification();
