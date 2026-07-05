@@ -92,6 +92,18 @@ export interface CardDraft {
   pickCount: number;
 }
 
+export interface HidingScoreDetails {
+  hiderTeamName: string;
+  baseHidingTime: number; // seconds
+  handTimeBonuses: number; // seconds
+  bonusCards: {
+    title: string;
+    rarity: string;
+    bonusMin: number;
+  }[];
+  finalScore: number; // seconds
+}
+
 export interface RoomState {
   code: string;
   centerLat: number;
@@ -118,4 +130,5 @@ export interface RoomState {
   history: string[]; // List of events that occurred
   pois?: POI[];
   drawnCurseIds?: string[];
+  lastHidingScoreDetails?: HidingScoreDetails | null;
 }

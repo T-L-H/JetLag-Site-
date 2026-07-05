@@ -245,6 +245,7 @@ app.post('/api/rooms', async (req, res) => {
     history: [],
     pois,
     drawnCurseIds: [],
+    lastHidingScoreDetails: null,
   };
 
   rooms[code] = room;
@@ -811,6 +812,13 @@ app.post('/api/rooms/:code/play-powerup', (req, res) => {
 
   const card = room.hiderHand[cardIndex];
 
+  if (targetCardId === 'DISCARD_ONLY') {
+    room.hiderHand = room.hiderHand.filter((c) => c.id !== cardId);
+    addHistoryLog(room, `Hider discarded "${card.title}" to satisfy hand size limit.`);
+    broadcastRoom(code);
+    return res.json(room);
+  }
+
   if (card.title === 'Duplicate') {
     const target = room.hiderHand.find((c) => c.id === targetCardId);
     if (!target) {
@@ -1056,6 +1064,21 @@ app.post('/api/rooms/:code/catch-hider', (req, res) => {
     hiderTeam.score = finalScore;
   }
 
+  // Populate last hiding score details for the breakdown display
+  room.lastHidingScoreDetails = {
+    hiderTeamName: hiderTeam ? hiderTeam.name : 'Hiders',
+    baseHidingTime: timeSpent,
+    handTimeBonuses: timeBonusesAdded,
+    bonusCards: room.hiderHand
+      .filter((card) => card.type === 'TIME')
+      .map((card) => ({
+        title: card.title,
+        rarity: card.rarity,
+        bonusMin: getBonusMinutesForSize(card.rarity, room.gameSize),
+      })),
+    finalScore: finalScore,
+  };
+
   // Stop timer
   room.timerStart = null;
   room.gamePhase = 'INTERMISSION';
@@ -1101,6 +1124,7 @@ app.post('/api/rooms/:code/next-round', (req, res) => {
     room.hidingStationPin = null;
     room.hidingEndTime = null;
     room.drawnCurseIds = [];
+    room.lastHidingScoreDetails = null;
 
     // Reset grid to active only if within the circle boundaries (avoids square glitch!)
     room.grid = room.grid.map((c) => {
@@ -1139,6 +1163,7 @@ app.post('/api/rooms/:code/reset', (req, res) => {
   room.hidingEndTime = null;
   room.vetoedTypes = [];
   room.drawnCurseIds = [];
+  room.lastHidingScoreDetails = null;
   room.grid = generateGrid(room.centerLat, room.centerLng, room.radiusMiles);
   room.history = [];
 

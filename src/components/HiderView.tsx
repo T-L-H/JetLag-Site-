@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, RoomState, ActiveQuestion, ActiveCurse } from '../types';
 import { Shield, Sparkles, MapPin, CheckCircle, Flame, Eye, EyeOff, Camera, RefreshCw, Layers, Check, X, AlertTriangle, HelpCircle } from 'lucide-react';
 import audio from '../lib/audio';
-import { getCurseDiscardRequirement } from '../lib/cardsData';
+import { getCurseDiscardRequirement, getBonusMinutesForSize } from '../lib/cardsData';
 
 interface HiderViewProps {
   room: RoomState;
@@ -719,6 +719,20 @@ export default function HiderView({
                     <h4 className="text-xs font-black tracking-tight text-slate-100">{card.title}</h4>
                     <p className="text-[10px] text-slate-300 leading-normal opacity-90">{card.desc}</p>
                     
+                    {isTimeCard && (
+                      <div className="mt-2 p-2 rounded-xl bg-amber-500/5 border border-amber-500/15 space-y-1 font-sans">
+                        <div className="flex justify-between text-[10px] font-semibold text-amber-300">
+                          <span>Active Time Bonus:</span>
+                          <span className="font-extrabold text-amber-400 text-[11px]">+{getBonusMinutesForSize(card.rarity, room.gameSize)} min</span>
+                        </div>
+                        <div className="text-[8px] text-slate-400 flex justify-between border-t border-amber-500/10 pt-1">
+                          <span className={room.gameSize === 'S' ? 'text-amber-400 font-extrabold' : ''}>Small: +{getBonusMinutesForSize(card.rarity, 'S')}m</span>
+                          <span className={room.gameSize === 'M' ? 'text-amber-400 font-extrabold' : ''}>Medium: +{getBonusMinutesForSize(card.rarity, 'M')}m</span>
+                          <span className={room.gameSize === 'L' ? 'text-amber-400 font-extrabold' : ''}>Large: +{getBonusMinutesForSize(card.rarity, 'L')}m</span>
+                        </div>
+                      </div>
+                    )}
+                    
                     {card.costDesc && (
                       <div className="text-[9px] text-slate-400 border-t border-slate-850 pt-1.5 mt-1.5">
                         <b>Cost:</b> {card.costDesc}
@@ -1408,22 +1422,22 @@ export default function HiderView({
 
       {/* 🎁 CARD DRAFT REWARD MODAL */}
       {room.pendingDraft && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-3 md:p-4 z-[2500]">
-          <div className="bg-[#0e1322] border border-cyan-500/40 rounded-2xl md:rounded-3xl p-3 sm:p-5 md:p-6 shadow-2xl max-w-lg w-full max-h-[88vh] sm:max-h-[94vh] flex flex-col space-y-2.5 sm:space-y-4 text-center">
-            <div className="p-2.5 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto border border-cyan-500/20 shrink-0 hidden sm:block">
-              <Sparkles className="w-5 h-5 animate-pulse" />
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 z-[2500]">
+          <div className="bg-[#0e1322] border border-cyan-500/40 rounded-2xl md:rounded-3xl p-2.5 sm:p-5 md:p-6 shadow-2xl max-w-lg w-full max-h-[96vh] sm:max-h-[94vh] flex flex-col space-y-1.5 sm:space-y-4 text-center">
+            <div className="p-2 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto border border-cyan-500/20 shrink-0 hidden sm:block">
+              <Sparkles className="w-4 h-4 animate-pulse" />
             </div>
 
             <div className="shrink-0">
-              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-cyan-400">Card Draft Selection</span>
-              <h3 className="text-base sm:text-lg font-black text-slate-100 uppercase tracking-tight mt-0.5">🎁 Choose Your Reward</h3>
-              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 max-w-sm mx-auto">
+              <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-cyan-400">Card Draft Selection</span>
+              <h3 className="text-sm sm:text-lg font-black text-slate-100 uppercase tracking-tight mt-0.5">🎁 Choose Your Reward</h3>
+              <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 max-w-sm mx-auto">
                 Select exactly <span className="text-cyan-300 font-bold">{room.pendingDraft.pickCount} card(s)</span> to add to your hand out of the <span className="text-slate-300 font-bold">{room.pendingDraft.options.length} options</span>:
               </p>
             </div>
 
             {/* List of draft card options */}
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1 grid grid-cols-1 gap-2 sm:gap-2.5">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 grid grid-cols-1 gap-1.5 sm:gap-2.5">
               {room.pendingDraft.options.map((card) => {
                 const isSelected = selectedDraftIds.includes(card.id);
                 const rarityColor =
@@ -1456,7 +1470,7 @@ export default function HiderView({
                         }
                       }
                     }}
-                    className={`text-left p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all relative shrink-0 ${
+                    className={`text-left p-2 sm:p-4 rounded-xl sm:rounded-2xl border transition-all relative shrink-0 ${
                       isSelected
                         ? 'bg-cyan-500/10 border-cyan-500 shadow-md shadow-cyan-950/40'
                         : 'bg-slate-950/80 border-slate-900 hover:border-slate-800'
@@ -1469,6 +1483,11 @@ export default function HiderView({
                         </span>
                         <h4 className="text-xs sm:text-sm font-black text-slate-100 mt-1 sm:mt-2 truncate">{card.title}</h4>
                         <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 leading-normal">{card.desc}</p>
+                        {card.type === 'TIME' && (
+                          <div className="mt-1.5 text-[8px] sm:text-[9px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 w-fit font-bold">
+                            ⏳ Adds +{getBonusMinutesForSize(card.rarity, room.gameSize)}m bonus in {room.gameSize} game size
+                          </div>
+                        )}
                       </div>
                       <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center shrink-0 ${
                         isSelected ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-800 text-transparent'

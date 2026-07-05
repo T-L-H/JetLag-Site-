@@ -51,6 +51,65 @@ export default function LeaderboardView({
             </p>
           </div>
 
+          {/* Round Score Breakdown (Overhauled!) */}
+          {room.lastHidingScoreDetails && (
+            <div className="bg-gradient-to-br from-slate-950 to-slate-900 border border-cyan-500/30 p-4 rounded-2xl text-left space-y-3 shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest block">📊 ROUND SCORE BREAKDOWN</span>
+                <span className="text-[9px] font-extrabold bg-cyan-500/10 text-cyan-400 px-2 py-0.5 rounded-md border border-cyan-500/20 uppercase tracking-wider">
+                  {room.lastHidingScoreDetails.hiderTeamName}
+                </span>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                {/* Base Hiding Time Row */}
+                <div className="flex justify-between items-center bg-slate-950/45 p-2 rounded-xl border border-slate-900">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-slate-400">⏱️ Surviving Hiding Time</span>
+                  </div>
+                  <span className="font-mono text-slate-100 font-bold">{formatTime(room.lastHidingScoreDetails.baseHidingTime)}</span>
+                </div>
+
+                {/* Hand Time Bonuses Row */}
+                <div className="bg-slate-950/45 p-2 rounded-xl border border-slate-900 space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">⏳ Hand Time Bonus Cards</span>
+                    <span className="font-mono text-emerald-400 font-extrabold">
+                      +{Math.floor(room.lastHidingScoreDetails.handTimeBonuses / 60)}m 0s
+                    </span>
+                  </div>
+                  
+                  {room.lastHidingScoreDetails.bonusCards.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-1 border-t border-slate-900 pt-1.5 pl-1.5">
+                      {room.lastHidingScoreDetails.bonusCards.map((bc, idx) => {
+                        const rColor = bc.rarity === 'RED' ? 'text-rose-400' : bc.rarity === 'ORANGE' ? 'text-orange-400' : bc.rarity === 'YELLOW' ? 'text-amber-400' : bc.rarity === 'GREEN' ? 'text-emerald-400' : 'text-blue-400';
+                        return (
+                          <div key={idx} className="flex justify-between text-[10px]">
+                            <span className="text-slate-500 truncate flex items-center space-x-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500/40" />
+                              <span>{bc.title} ({bc.rarity})</span>
+                            </span>
+                            <span className={`font-mono font-bold ${rColor}`}>+{bc.bonusMin}m</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-500 italic pl-1.5 pt-0.5">No TIME bonus cards held in hand.</p>
+                  )}
+                </div>
+
+                {/* Final Score Row */}
+                <div className="flex justify-between items-center bg-cyan-950/20 border border-cyan-500/25 p-2 rounded-xl">
+                  <span className="text-cyan-300 font-extrabold uppercase text-[10px] tracking-wider">Final Survival Score</span>
+                  <span className="font-mono text-cyan-400 font-black text-sm">{formatTime(room.lastHidingScoreDetails.finalScore)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Scores table */}
           <div className="bg-slate-950/80 border border-slate-850 p-4 rounded-2xl text-left space-y-3">
             <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-900 pb-1.5">
