@@ -5,7 +5,7 @@ import HiderView from './components/HiderView';
 import SeekerView from './components/SeekerView';
 import MapComponent from './components/MapComponent';
 import LeaderboardView from './components/LeaderboardView';
-import { Globe, Shield, RefreshCw, Compass, MapPin, Sliders, Volume2, VolumeX, Eye, EyeOff, Info } from 'lucide-react';
+import { Globe, Shield, RefreshCw, Compass, MapPin, Sliders, Volume2, VolumeX, Eye, EyeOff, Info, Sparkles, Radio, HelpCircle, CheckCircle, AlertTriangle, Check } from 'lucide-react';
 import audio from './lib/audio';
 import { safeStorage } from './lib/storage';
 
@@ -133,6 +133,13 @@ export default function App() {
       setTransitPin(null);
     }
   }, [room?.gamePhase]);
+
+  // Hide controls automatically when entering map selection mode to make map visible
+  useEffect(() => {
+    if (selectionMode) {
+      setShowMobileControls(false);
+    }
+  }, [selectionMode]);
 
   // Formatter MM:SS
   const getFormattedTime = (totalSeconds: number) => {
@@ -397,6 +404,86 @@ export default function App() {
   const currentTeam = currentPlayer ? room?.teams.find((t) => t.name === currentPlayer.team) : null;
   const isHider = currentTeam?.role === 'HIDER';
 
+  // Calculate current mobile notification alerts
+  const getActiveNotification = () => {
+    if (!room) return null;
+    
+    if (isHider) {
+      if (room.gamePhase === 'HIDING' && !room.hidingStationPin) {
+        return {
+          type: 'danger',
+          label: 'SETUP INCOMPLETE',
+          desc: 'Select your station & drop your starting pin!',
+          icon: 'MapPin'
+        };
+      }
+      if (room.pendingDraft) {
+        return {
+          type: 'reward',
+          label: 'CARD DRAFT REWARD',
+          desc: 'Choose a power-up card! Open controls to draft.',
+          icon: 'Sparkles'
+        };
+      }
+      if (room.activeQuestion && room.activeQuestion.status === 'PENDING') {
+        return {
+          type: 'warning',
+          label: 'PENDING PROXIMITY QUESTION',
+          desc: 'Seekers asked a question! Tap to answer.',
+          icon: 'HelpCircle'
+        };
+      }
+      const hasPendingCurses = room.activeCurses && room.activeCurses.some(c => c.pendingConfirmation);
+      if (hasPendingCurses) {
+        return {
+          type: 'danger',
+          label: 'CURSE DISMISSAL REQUEST',
+          desc: 'Seeker claims curse completion. Review now!',
+          icon: 'AlertTriangle'
+        };
+      }
+    } else {
+      if (room.activeCurses && room.activeCurses.length > 0) {
+        return {
+          type: 'danger',
+          label: 'ACTIVE CURSE - JAMMED',
+          desc: 'Your interface is jammed! All questions are locked.',
+          icon: 'ShieldAlert'
+        };
+      }
+      if (room.activeQuestion && room.activeQuestion.status === 'PENDING') {
+        return {
+          type: 'info',
+          label: 'WAITING FOR ANSWER',
+          desc: 'Proximity query sent. Waiting for Hider response.',
+          icon: 'Radio'
+        };
+      }
+      if (room.activeQuestion && room.activeQuestion.status === 'ANSWERED') {
+        return {
+          type: 'success',
+          label: 'QUESTION ANSWERED',
+          desc: 'New location details received! Tap to view.',
+          icon: 'CheckCircle'
+        };
+      }
+    }
+    return null;
+  };
+
+  const renderNotificationIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'MapPin': return <MapPin className="w-4 h-4 text-rose-400 animate-pulse" />;
+      case 'Sparkles': return <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />;
+      case 'HelpCircle': return <HelpCircle className="w-4 h-4 text-amber-400 animate-pulse" />;
+      case 'AlertTriangle': return <AlertTriangle className="w-4 h-4 text-red-400 animate-pulse" />;
+      case 'ShieldAlert': return <Shield className="w-4 h-4 text-red-400 animate-pulse" />;
+      case 'Radio': return <Radio className="w-4 h-4 text-sky-400 animate-pulse" />;
+      case 'CheckCircle': return <CheckCircle className="w-4 h-4 text-emerald-400 animate-pulse" />;
+      default: return <Info className="w-4 h-4 text-cyan-400" />;
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#0a0d16] text-slate-100 font-sans">
       {/* Header bar */}
@@ -406,8 +493,8 @@ export default function App() {
             <Globe className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="hidden sm:block text-sm font-black tracking-tight text-slate-100">JET TRACKER</h1>
-            <p className="text-sm sm:text-[10px] text-slate-200 sm:text-slate-400 font-black sm:font-semibold uppercase tracking-wider">
+            <h1 className="hidden md:block text-sm font-black tracking-tight text-slate-100">JET TRACKER</h1>
+            <p className="text-sm md:text-[10px] text-slate-200 md:text-slate-400 font-black md:font-semibold uppercase tracking-wider">
               {room ? `LOBBY: ${room.code}` : 'GPS Proximity Field'}
             </p>
           </div>
@@ -606,18 +693,96 @@ export default function App() {
                 previewTentacleDistance={tentacleDistance}
               />
 
+              {/* Small "Choose Pin" popup at top of map during selectionMode */}
+              {selectionMode && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[3000] w-[calc(100%-2rem)] sm:w-auto max-w-sm">
+                  <div className="bg-[#0b0e17]/95 backdrop-blur-md border border-cyan-500/30 rounded-2xl p-3.5 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                    <div className="flex items-start space-x-2.5">
+                      <div className="p-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-xl text-cyan-400">
+                        <MapPin className="w-4 h-4 text-cyan-400 animate-pulse" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400 block">
+                          {selectionMode === 'TRANSIT_PIN' ? 'Choose Station Pin' : 'Choose Target Pin'}
+                        </span>
+                        <p className="text-[11px] text-slate-300 font-medium leading-relaxed mt-0.5">
+                          {selectionMode === 'TRANSIT_PIN' 
+                            ? (transitPin ? '✔️ Station pin dropped! Tap map to relocate.' : 'Tap on the map to place station pin.')
+                            : (customPin ? '✔️ Coordinate pin dropped! Tap map to relocate.' : 'Tap on the map to place coordinate pin.')
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectionMode(null);
+                        setShowMobileControls(true); // Pop controls back up!
+                        audio.playSuccess();
+                      }}
+                      className="w-full sm:w-auto px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl text-[11px] font-black tracking-wide whitespace-nowrap shadow-md cursor-pointer"
+                    >
+                      Done & Continue
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Floating "Show Controls" toggle on Mobile when hidden */}
               {!showMobileControls && (
-                <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[3000]">
+                <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[3000] flex flex-col items-center space-y-3 w-[calc(100%-2rem)] max-w-sm">
+                  {/* Big Notification Alert banner */}
+                  {(() => {
+                    const notif = getActiveNotification();
+                    if (!notif) return null;
+                    
+                    const borderColors = {
+                      danger: 'border-red-500/30 bg-[#160a0f]/95 text-red-400 shadow-red-950/20',
+                      warning: 'border-amber-500/30 bg-[#16120a]/95 text-amber-400 shadow-amber-950/20',
+                      reward: 'border-purple-500/30 bg-[#130a16]/95 text-purple-400 shadow-purple-950/20',
+                      info: 'border-sky-500/30 bg-[#0a1116]/95 text-sky-400 shadow-sky-950/20',
+                      success: 'border-emerald-500/30 bg-[#0a160d]/95 text-emerald-400 shadow-emerald-950/20',
+                    }[notif.type] || 'border-slate-800 bg-slate-950/95 text-slate-400';
+
+                    const dotColors = {
+                      danger: 'bg-red-500',
+                      warning: 'bg-amber-500',
+                      reward: 'bg-purple-500',
+                      info: 'bg-sky-500',
+                      success: 'bg-emerald-500',
+                    }[notif.type] || 'bg-cyan-500';
+
+                    return (
+                      <div 
+                        onClick={() => {
+                          setShowMobileControls(true);
+                          audio.playClick();
+                        }}
+                        className={`w-full flex items-start space-x-3 border rounded-2xl p-3 shadow-2xl backdrop-blur-md cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${borderColors}`}
+                      >
+                        <div className="p-1.5 bg-slate-900/55 rounded-xl border border-slate-850 flex items-center justify-center shrink-0">
+                          {renderNotificationIcon(notif.icon)}
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="flex items-center space-x-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full ${dotColors} animate-pulse`} />
+                            <span className="text-[9px] font-black uppercase tracking-wider block leading-none">{notif.label}</span>
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-200 mt-1 leading-normal">{notif.desc}</p>
+                          <span className="text-[8px] font-medium text-slate-400 block mt-1.5 underline">Tap to open controls & view details</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <button
                     onClick={() => {
                       setShowMobileControls(true);
                       audio.playClick();
                     }}
-                    className="flex items-center space-x-1.5 bg-cyan-600 hover:bg-cyan-500 border border-cyan-400 text-white font-bold text-xs px-5 py-2.5 rounded-full shadow-2xl animate-bounce"
+                    className="flex items-center space-x-1.5 bg-cyan-600 hover:bg-cyan-500 border border-cyan-400 text-white font-black text-xs px-5 py-2.5 rounded-full shadow-2xl cursor-pointer"
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Show Controls</span>
+                    <Eye className="w-3.5 h-3.5 animate-pulse" />
+                    <span>Show Match Controls</span>
                   </button>
                 </div>
               )}

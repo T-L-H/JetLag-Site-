@@ -819,6 +819,20 @@ export default function SeekerView({
                       )}
                     </div>
 
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          enablePinSelection('CUSTOM_PIN');
+                          audio.playClick();
+                        }}
+                        className="w-full py-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-cyan-400 hover:text-cyan-300 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 shadow-md"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                        <span>Select Pin on Map</span>
+                      </button>
+                    </div>
+
                     {geocodingError && (
                       <p className="text-[10px] text-amber-400 font-bold leading-normal">{geocodingError}</p>
                     )}
