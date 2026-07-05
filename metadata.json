@@ -1,0 +1,6 @@
+{
+  "name": "Jet Tracker",
+  "description": "A real-world, real-time GPS tracking game inspired by 'Jet Lag: The Game', featuring geospatial map cutting, questions, power-ups, and curses.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

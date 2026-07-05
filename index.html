@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jet Tracker: GPS Tracking Game</title>
+    <!-- Leaflet Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <style>
+      body {
+        margin: 0;
+        background-color: #0c0f16;
+        color: #f3f4f6;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      /* Clean styling for Leaflet custom overlays */
+      .leaflet-container {
+        background: #090d16 !important;
+      }
+      .leaflet-bar {
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+      }
+      .leaflet-bar a {
+        background-color: #171d2c !important;
+        color: #38bdf8 !important;
+        border-bottom: 1px solid #1e293b !important;
+      }
+      .leaflet-bar a:hover {
+        background-color: #1e293b !important;
+        color: #0ea5e9 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Leaflet Map JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
