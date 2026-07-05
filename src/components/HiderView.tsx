@@ -1409,21 +1409,21 @@ export default function HiderView({
       {/* 🎁 CARD DRAFT REWARD MODAL */}
       {room.pendingDraft && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-3 md:p-4 z-[2500]">
-          <div className="bg-[#0e1322] border border-cyan-500/40 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-lg w-full max-h-[94vh] flex flex-col space-y-3 md:space-y-4 text-center">
-            <div className="p-2.5 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto border border-cyan-500/20 shrink-0">
-              <Sparkles className="w-6 h-6 animate-pulse" />
+          <div className="bg-[#0e1322] border border-cyan-500/40 rounded-2xl md:rounded-3xl p-3 sm:p-5 md:p-6 shadow-2xl max-w-lg w-full max-h-[88vh] sm:max-h-[94vh] flex flex-col space-y-2.5 sm:space-y-4 text-center">
+            <div className="p-2.5 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto border border-cyan-500/20 shrink-0 hidden sm:block">
+              <Sparkles className="w-5 h-5 animate-pulse" />
             </div>
 
             <div className="shrink-0">
-              <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Card Draft Selection</span>
-              <h3 className="text-lg font-black text-slate-100 uppercase tracking-tight mt-0.5">🎁 Choose Your Reward</h3>
-              <p className="text-xs text-slate-400 mt-0.5 max-w-sm mx-auto">
+              <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-cyan-400">Card Draft Selection</span>
+              <h3 className="text-base sm:text-lg font-black text-slate-100 uppercase tracking-tight mt-0.5">🎁 Choose Your Reward</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 max-w-sm mx-auto">
                 Select exactly <span className="text-cyan-300 font-bold">{room.pendingDraft.pickCount} card(s)</span> to add to your hand out of the <span className="text-slate-300 font-bold">{room.pendingDraft.options.length} options</span>:
               </p>
             </div>
 
             {/* List of draft card options */}
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1 grid grid-cols-1 gap-2.5">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 grid grid-cols-1 gap-2 sm:gap-2.5">
               {room.pendingDraft.options.map((card) => {
                 const isSelected = selectedDraftIds.includes(card.id);
                 const rarityColor =
@@ -1456,24 +1456,24 @@ export default function HiderView({
                         }
                       }
                     }}
-                    className={`text-left p-4 rounded-2xl border transition-all relative shrink-0 ${
+                    className={`text-left p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all relative shrink-0 ${
                       isSelected
                         ? 'bg-cyan-500/10 border-cyan-500 shadow-md shadow-cyan-950/40'
                         : 'bg-slate-950/80 border-slate-900 hover:border-slate-800'
                     }`}
                   >
                     <div className="flex justify-between items-start">
-                      <div>
-                        <span className={`text-[8px] font-black border px-1.5 py-0.5 rounded uppercase tracking-wider ${rarityColor}`}>
+                      <div className="flex-1 min-w-0 pr-2">
+                        <span className={`text-[7px] sm:text-[8px] font-black border px-1.5 py-0.5 rounded uppercase tracking-wider ${rarityColor}`}>
                           {card.rarity} • {card.type}
                         </span>
-                        <h4 className="text-sm font-black text-slate-100 mt-2">{card.title}</h4>
-                        <p className="text-xs text-slate-400 mt-1 leading-normal">{card.desc}</p>
+                        <h4 className="text-xs sm:text-sm font-black text-slate-100 mt-1 sm:mt-2 truncate">{card.title}</h4>
+                        <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1 leading-normal">{card.desc}</p>
                       </div>
-                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                      <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center shrink-0 ${
                         isSelected ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-800 text-transparent'
                       }`}>
-                        <Check className="w-3 h-3 stroke-[3]" />
+                        <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-[3]" />
                       </div>
                     </div>
                   </button>
@@ -1488,7 +1488,7 @@ export default function HiderView({
                 audio.playSuccess();
               }}
               disabled={selectedDraftIds.length !== room.pendingDraft.pickCount}
-              className={`w-full py-3 md:py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow shrink-0 ${
+              className={`w-full py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow shrink-0 ${
                 selectedDraftIds.length === room.pendingDraft.pickCount
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 cursor-pointer hover:scale-[1.01]'
                   : 'bg-slate-850 text-slate-500 border border-slate-800 cursor-not-allowed'
