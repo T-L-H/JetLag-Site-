@@ -586,7 +586,10 @@ export default function App() {
 
             {/* Floating Left Menu Bento */}
             <div className={`
-              ${showMobileControls ? 'flex' : 'hidden md:flex'}
+              ${(room.gamePhase === 'SEEKING' && !isHider) 
+                ? 'hidden md:flex' 
+                : showMobileControls ? 'flex' : 'hidden md:flex'
+              }
               w-[calc(100%-2rem)] sm:w-[480px] md:w-[360px] lg:w-[420px] 
               absolute md:relative top-1/2 md:top-auto -translate-y-1/2 md:translate-y-0 left-4 right-4 md:left-auto md:right-auto md:h-full
               max-h-[85vh] md:max-h-none
@@ -693,6 +696,37 @@ export default function App() {
                 previewTentacleDistance={tentacleDistance}
               />
 
+              {/* Seeker Mobile Floating Overlays */}
+              {room.gamePhase === 'SEEKING' && !isHider && (
+                <div className="md:hidden absolute inset-0 pointer-events-none z-[1000]">
+                  <SeekerView
+                    room={room}
+                    userName={userName}
+                    onProposeQuestion={handleProposeQuestion}
+                    onDismissCurseRequest={handleDismissCurseRequest}
+                    onCatchHider={handleCatchHider}
+                    enablePinSelection={(mode) => setSelectionMode(mode)}
+                    customPin={customPin}
+                    clearCustomPin={() => setCustomPin(null)}
+                    onPinDropped={(lat, lng) => handlePinDroppedOnMap(lat, lng, true)}
+                    qType={qType}
+                    setQType={setQType}
+                    matchingPoi={matchingPoi}
+                    setMatchingPoi={setMatchingPoi}
+                    radarDistance={radarDistance}
+                    setRadarDistance={setRadarDistance}
+                    tentaclePoi={tentaclePoi}
+                    setTentaclePoi={setTentaclePoi}
+                    tentacleDistance={tentacleDistance}
+                    setTentacleDistance={setTentacleDistance}
+                    previewingQuestion={previewingQuestion}
+                    setPreviewingQuestion={setPreviewingQuestion}
+                    onClearQuestion={handleClearQuestion}
+                    isMobileFloating={true}
+                  />
+                </div>
+              )}
+
               {/* Small "Choose Pin" popup at top of map during selectionMode */}
               {selectionMode && (
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[3000] w-[calc(100%-2rem)] sm:w-auto max-w-sm">
@@ -716,7 +750,9 @@ export default function App() {
                     <button
                       onClick={() => {
                         setSelectionMode(null);
-                        setShowMobileControls(true); // Pop controls back up!
+                        if (room.gamePhase !== 'SEEKING' || isHider) {
+                          setShowMobileControls(true); // Pop controls back up!
+                        }
                         audio.playSuccess();
                       }}
                       className="w-full sm:w-auto px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl text-[11px] font-black tracking-wide whitespace-nowrap shadow-md cursor-pointer"
@@ -728,7 +764,7 @@ export default function App() {
               )}
 
               {/* Floating "Show Controls" toggle on Mobile when hidden */}
-              {!showMobileControls && (
+              {!showMobileControls && !(room.gamePhase === 'SEEKING' && !isHider) && (
                 <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[3000] flex flex-col items-center space-y-3 w-[calc(100%-2rem)] max-w-sm">
                   {/* Big Notification Alert banner */}
                   {(() => {

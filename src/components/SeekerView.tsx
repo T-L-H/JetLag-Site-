@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RoomState, ActiveQuestion, ActiveCurse } from '../types';
 import { MATCHING_POIS, MEASURING_POIS, PHOTO_SUBJECTS } from '../lib/cardsData';
-import { Radio, MapPin, Eye, Compass, ShieldAlert, Sparkles, Layers, Image, Check, X, Shield, Camera, AlertCircle, HelpCircle } from 'lucide-react';
+import { Radio, MapPin, Eye, Compass, ShieldAlert, Sparkles, Layers, Image, Check, X, Shield, Camera, AlertCircle, HelpCircle, Flame } from 'lucide-react';
 import audio from '../lib/audio';
 
 // Helper function to check if a pin is vetoed based on lat/lng proximity (~100m)
@@ -45,6 +45,7 @@ interface SeekerViewProps {
   previewingQuestion: Omit<ActiveQuestion, 'id' | 'status'> | null;
   setPreviewingQuestion: (q: Omit<ActiveQuestion, 'id' | 'status'> | null) => void;
   onClearQuestion: () => void;
+  isMobileFloating?: boolean;
 }
 
 export default function SeekerView({
@@ -70,8 +71,10 @@ export default function SeekerView({
   previewingQuestion,
   setPreviewingQuestion,
   onClearQuestion,
+  isMobileFloating = false,
 }: SeekerViewProps) {
   const [activeTab, setActiveTab] = useState<'ASK' | 'STATUS'>('ASK');
+  const [mobileActiveTab, setMobileActiveTab] = useState<'ASK' | 'STATUS'>('ASK');
 
   // Address geocoding states for Measuring question
   const [addressInput, setAddressInput] = useState('');
@@ -651,6 +654,499 @@ export default function SeekerView({
   const isVetoedRadar = false;
   const isVetoedTentacles = false;
   const isVetoedPhoto = false;
+
+  if (isMobileFloating) {
+    const floatingItems = [
+      { type: 'MATCHING', label: 'Matching (POI)', icon: Layers, vetoed: isVetoedMatching },
+      { type: 'MEASURING', label: 'Measuring (Pin)', icon: MapPin, vetoed: isVetoedMeasuring },
+      { type: 'THERMOMETER', label: 'Thermometer', icon: Flame, vetoed: isVetoedThermometer },
+      { type: 'RADAR', label: 'Radar (Circle)', icon: Radio, vetoed: isVetoedRadar },
+      { type: 'TENTACLES', label: 'Tentacles (Circle)', icon: Compass, vetoed: isVetoedTentacles },
+      { type: 'PHOTO', label: 'Photo Verification', icon: Camera, vetoed: isVetoedPhoto },
+      { type: 'STATUS', label: 'Status & Apprehend', icon: Shield, vetoed: false, isSpecial: true },
+    ];
+
+    return (
+      <div className="relative w-full h-full pointer-events-none select-none">
+        {/* Left Side: 7 Vertical Icons */}
+        <div className="absolute left-3 top-20 flex flex-col space-y-2 pointer-events-auto z-[1010]">
+          {floatingItems.map((item) => {
+            const isActive = item.isSpecial 
+              ? (mobileActiveTab === 'STATUS' && qType === null)
+              : (qType === item.type && mobileActiveTab === 'ASK');
+            const IconComponent = item.icon;
+            return (
+              <button
+                key={item.type}
+                onClick={() => {
+                  audio.playClick();
+                  if (item.isSpecial) {
+                    if (mobileActiveTab === 'STATUS' && qType === null) {
+                      setMobileActiveTab('ASK');
+                    } else {
+                      setMobileActiveTab('STATUS');
+                      setQType(null);
+                    }
+                  } else {
+                    if (qType === item.type && mobileActiveTab === 'ASK') {
+                      setQType(null);
+                    } else {
+                      setQType(item.type as any);
+                      setMobileActiveTab('ASK');
+                    }
+                  }
+                }}
+                disabled={item.vetoed}
+                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all relative shadow-lg ${
+                  item.vetoed
+                    ? 'bg-rose-950/40 border-rose-900/40 text-rose-500/40 cursor-not-allowed'
+                    : isActive
+                    ? item.isSpecial
+                      ? 'bg-amber-500 border-amber-400 text-slate-950 scale-105 shadow-amber-500/20'
+                      : 'bg-cyan-500 border-cyan-400 text-slate-950 scale-105 shadow-cyan-500/20'
+                    : item.isSpecial
+                    ? 'bg-slate-950/90 hover:bg-slate-900 border-amber-500/30 text-amber-400/80'
+                    : 'bg-slate-950/90 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+                title={item.label}
+              >
+                <IconComponent className="w-5 h-5 stroke-[2.5]" />
+                {item.vetoed && (
+                  <span className="absolute -top-1 -right-1 text-[7px] bg-rose-500 text-slate-950 font-black px-1 rounded uppercase scale-75">
+                    Banned
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* BOTTOM FLOATING PARAMETER / FORM OVERLAY */}
+        {((qType !== null && mobileActiveTab === 'ASK') || (mobileActiveTab === 'STATUS' && qType === null)) && !previewingQuestion && (
+          <div className="absolute bottom-24 left-3 right-3 max-w-sm mx-auto bg-[#0a0e1a]/95 backdrop-blur-md border border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1020] text-left animate-in fade-in slide-in-from-bottom-4 duration-200">
+            {/* Header */}
+            <div className="flex justify-between items-center pb-2 border-b border-slate-900 shrink-0">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">
+                  {mobileActiveTab === 'STATUS' ? 'LIVE TRACKING STATUS' : 'QUERY CONFIGURATION'}
+                </span>
+                <h4 className="text-xs font-black text-slate-200 uppercase mt-0.5 font-sans">
+                  {mobileActiveTab === 'STATUS' 
+                    ? 'Status & Apprehend'
+                    : qType === 'MATCHING' ? 'Matching (POI)'
+                    : qType === 'MEASURING' ? 'Measuring (Pin)'
+                    : qType === 'THERMOMETER' ? 'Thermometer Path'
+                    : qType === 'RADAR' ? 'Radar Search'
+                    : qType === 'TENTACLES' ? 'Tentacles Nearest'
+                    : 'Photo Verification'
+                  }
+                </h4>
+              </div>
+              <button
+                onClick={() => {
+                  audio.playClick();
+                  setQType(null);
+                  setMobileActiveTab('ASK');
+                }}
+                className="p-1.5 bg-slate-950 border border-slate-850 rounded-lg hover:text-white text-slate-400 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Form Content body */}
+            <div className="max-h-60 overflow-y-auto pr-1 space-y-3">
+              {/* MATCHING FORM */}
+              {qType === 'MATCHING' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Select POI Type</label>
+                    <select
+                      value={matchingPoi}
+                      onChange={(e) => {
+                        setMatchingPoi(e.target.value);
+                        audio.playClick();
+                      }}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+                    >
+                      {MATCHING_POIS.map((p) => {
+                        const isVetoed = room.vetoedTypes.includes(`MATCHING:${p}`);
+                        return (
+                          <option key={p} value={p} disabled={isVetoed}>
+                            {p} {isVetoed ? '(BANNED)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    <b>Math:</b> Compares closest POIs of same type. Draws Voronoi dividing line.
+                  </p>
+                </div>
+              )}
+
+              {/* MEASURING FORM */}
+              {qType === 'MEASURING' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Search/Geocode Address</label>
+                    <div className="flex items-center space-x-1.5">
+                      <input
+                        type="text"
+                        placeholder="Search address..."
+                        value={addressInput}
+                        onChange={(e) => {
+                          setAddressInput(e.target.value);
+                          setShowSuggestions(true);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleGeocodeAddress();
+                            setShowSuggestions(false);
+                          }
+                        }}
+                        className="flex-1 bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleGeocodeAddress();
+                          setShowSuggestions(false);
+                        }}
+                        disabled={geocodingLoading || !addressInput.trim()}
+                        className="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 rounded-xl text-xs font-black transition-colors shrink-0"
+                      >
+                        {geocodingLoading ? '...' : 'Search'}
+                      </button>
+                    </div>
+
+                    {showSuggestions && addressSuggestions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-slate-950 border border-slate-850 rounded-xl shadow-2xl overflow-hidden max-h-36 overflow-y-auto z-[1050]">
+                        {addressSuggestions.map((s, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => {
+                              setAddressInput(s.display_name);
+                              const lat = parseFloat(s.lat);
+                              const lng = parseFloat(s.lon);
+                              onPinDropped(lat, lng);
+                              setGeocodingError(null);
+                              setAddressSuggestions([]);
+                              setShowSuggestions(false);
+                              audio.playSuccess();
+                            }}
+                            className="w-full text-left px-3 py-2 text-[10px] text-slate-300 hover:bg-slate-900 border-b border-slate-900 last:border-0 truncate block"
+                          >
+                            {s.display_name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-950/60 border border-slate-900 p-2.5 rounded-xl space-y-2">
+                    {customPin ? (
+                      <div className="flex justify-between items-center text-[10px]">
+                        <div>
+                          <span className="font-bold uppercase tracking-wider block text-[8px] text-cyan-400">Target Pin Registered</span>
+                          <span className="font-mono mt-0.5 block text-[9px] text-slate-300">Lat: {customPin.lat.toFixed(4)} • Lng: {customPin.lng.toFixed(4)}</span>
+                        </div>
+                        <button onClick={clearCustomPin} className="text-red-400 hover:text-red-200 text-[10px] font-bold">Clear</button>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-slate-500 italic">Enter search query or tap below to set custom pin on map.</p>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        enablePinSelection('CUSTOM_PIN');
+                        audio.playClick();
+                      }}
+                      className="w-full py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-cyan-400 hover:text-cyan-300 rounded-xl text-[10px] font-black transition-all flex items-center justify-center space-x-1 shadow-md"
+                    >
+                      <MapPin className="w-3 h-3 text-cyan-400 animate-pulse" />
+                      <span>Drop Custom Pin on Map</span>
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    <b>Math:</b> Bisects distances. Yes = closer to pin. No = further.
+                  </p>
+                </div>
+              )}
+
+              {/* THERMOMETER FORM */}
+              {qType === 'THERMOMETER' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Target Distance</label>
+                    <select
+                      value={thermometerDistance}
+                      onChange={(e) => {
+                        setThermometerDistance(parseFloat(e.target.value));
+                        audio.playClick();
+                      }}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-2.5 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value={0.5} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:0.5')}>
+                        0.5 miles (805m) {room.vetoedTypes.includes('THERMOMETER:DIST:0.5') ? '(BANNED)' : ''}
+                      </option>
+                      <option value={3.0} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:3')}>
+                        3.0 miles (4.8km) {room.vetoedTypes.includes('THERMOMETER:DIST:3') ? '(BANNED)' : ''}
+                      </option>
+                      {room.gameSize !== 'S' && (
+                        <option value={10.0} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:10')}>
+                          10.0 miles (16km) {room.vetoedTypes.includes('THERMOMETER:DIST:10') ? '(BANNED)' : ''}
+                        </option>
+                      )}
+                      {room.gameSize === 'L' && (
+                        <option value={50.0} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:50')}>
+                          50.0 miles (80km) {room.vetoedTypes.includes('THERMOMETER:DIST:50') ? '(BANNED)' : ''}
+                        </option>
+                      )}
+                    </select>
+                  </div>
+
+                  {!thermometerActive ? (
+                    <button
+                      onClick={handleStartThermometer}
+                      className="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold rounded-xl shadow"
+                    >
+                      🔥 Start Tracking Distance
+                    </button>
+                  ) : (
+                    <div className="bg-slate-950/80 border border-slate-850 p-3 rounded-xl space-y-1.5 text-center">
+                      <span className="text-[8px] font-bold text-orange-400 uppercase tracking-widest animate-pulse block">Tracking Active</span>
+                      <p className="text-[9px] text-slate-300 leading-normal">
+                        Walk <b>{thermometerDistance} mi</b>. Path is visually drawn on map.
+                      </p>
+                      <button
+                        onClick={() => setThermometerActive(false)}
+                        className="text-[9px] text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-lg"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    <b>Math:</b> Yes = Hotter (closer to you). No = Colder.
+                  </p>
+                </div>
+              )}
+
+              {/* RADAR FORM */}
+              {qType === 'RADAR' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Search Circle Radius (Miles)</label>
+                    <select
+                      value={radarDistance}
+                      onChange={(e) => {
+                        setRadarDistance(parseFloat(e.target.value));
+                        audio.playClick();
+                      }}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-2.5 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value={0.25} disabled={room.vetoedTypes.includes('RADAR:DIST:0.25')}>0.25 miles (400m)</option>
+                      <option value={0.50} disabled={room.vetoedTypes.includes('RADAR:DIST:0.5')}>0.50 miles (800m)</option>
+                      <option value={1.00} disabled={room.vetoedTypes.includes('RADAR:DIST:1')}>1.00 mile (1.6km)</option>
+                      <option value={3.00} disabled={room.vetoedTypes.includes('RADAR:DIST:3')}>3.00 miles (4.8km)</option>
+                      <option value={5.00} disabled={room.vetoedTypes.includes('RADAR:DIST:5')}>5.00 miles (8.0km)</option>
+                      <option value={10.00} disabled={room.vetoedTypes.includes('RADAR:DIST:10')}>10.00 miles (16km)</option>
+                      <option value={25.00} disabled={room.vetoedTypes.includes('RADAR:DIST:25')}>25.00 miles (40km)</option>
+                      <option value={50.00} disabled={room.vetoedTypes.includes('RADAR:DIST:50')}>50.00 miles (80km)</option>
+                    </select>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    <b>Math:</b> Yes = restricts inside radius. No = subtracts radius circle.
+                  </p>
+                </div>
+              )}
+
+              {/* TENTACLES FORM */}
+              {qType === 'TENTACLES' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">POI Type</label>
+                      <select
+                        value={tentaclePoi}
+                        onChange={(e) => {
+                          setTentaclePoi(e.target.value);
+                          audio.playClick();
+                        }}
+                        className="w-full bg-slate-950 border border-slate-850 rounded-xl px-2 py-1.5 text-xs text-slate-200"
+                      >
+                        <option value="Museums" disabled={room.vetoedTypes.includes('TENTACLES:POI:Museums')}>Museums (1mi)</option>
+                        <option value="Libraries" disabled={room.vetoedTypes.includes('TENTACLES:POI:Libraries')}>Libraries (1mi)</option>
+                        <option value="Movie Theatres" disabled={room.vetoedTypes.includes('TENTACLES:POI:Movie Theatres')}>Movie Theatres (1mi)</option>
+                        <option value="Hospitals" disabled={room.vetoedTypes.includes('TENTACLES:POI:Hospitals')}>Hospitals (1mi)</option>
+                        {room.gameSize === 'L' && (
+                          <>
+                            <option value="Metro Lines" disabled={room.vetoedTypes.includes('TENTACLES:POI:Metro Lines')}>Metro Lines (15mi)</option>
+                            <option value="Zoos" disabled={room.vetoedTypes.includes('TENTACLES:POI:Zoos')}>Zoos (15mi)</option>
+                            <option value="Aquariums" disabled={room.vetoedTypes.includes('TENTACLES:POI:Aquariums')}>Aquariums (15mi)</option>
+                            <option value="Amusement Parks" disabled={room.vetoedTypes.includes('TENTACLES:POI:Amusement Parks')}>Amusement Parks (15mi)</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Radius</label>
+                      <select
+                        value={tentacleDistance}
+                        onChange={(e) => {
+                          setTentacleDistance(parseFloat(e.target.value));
+                          audio.playClick();
+                        }}
+                        className="w-full bg-slate-950 border border-slate-850 rounded-xl px-2 py-1.5 text-xs text-slate-200"
+                      >
+                        <option value={1.0}>1.0 mile</option>
+                        {room.gameSize === 'L' && <option value={15.0}>15.0 miles</option>}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    <b>Math:</b> Inside = isolates nearest POI Voronoi cell. Outside = eliminates circle.
+                  </p>
+                </div>
+              )}
+
+              {/* PHOTO FORM */}
+              {qType === 'PHOTO' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Photo Subject</label>
+                    <select
+                      value={photoSubject}
+                      onChange={(e) => {
+                        setPhotoSubject(e.target.value);
+                        audio.playClick();
+                      }}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-2.5 py-1.5 text-xs text-slate-200"
+                    >
+                      {(PHOTO_SUBJECTS[room.gameSize] || PHOTO_SUBJECTS.M).map((subj) => {
+                        const isVetoed = room.vetoedTypes.includes(`PHOTO:SUBJ:${subj}`);
+                        return (
+                          <option key={subj} value={subj} disabled={isVetoed}>
+                            {subj} {isVetoed ? '(BANNED)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <p className="text-[9px] text-slate-400 leading-normal">
+                    <b>Task:</b> Hiders must upload a direct, unedited native camera photo of this subject.
+                  </p>
+                </div>
+              )}
+
+              {/* STATUS & APPREHEND VIEW */}
+              {mobileActiveTab === 'STATUS' && qType === null && (
+                <div className="space-y-3 pt-1 text-center">
+                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-3 text-left space-y-2">
+                    <h5 className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Remaining Play Zone</h5>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <span className="text-slate-500 block text-[8px] uppercase tracking-wider">Active Search Cells</span>
+                        <span className="text-slate-200 font-extrabold text-xs">{room.grid.filter((c) => c.active).length} / {room.grid.length}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[8px] uppercase tracking-wider">Active Curses</span>
+                        <span className="text-rose-400 font-extrabold text-xs">{room.activeCurses.length} Active</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#120509]/40 border border-rose-950/40 rounded-xl p-3 text-center space-y-2">
+                    <h5 className="text-[9px] font-black text-slate-300 uppercase tracking-wider">Apprehend Confirmation</h5>
+                    <p className="text-[9px] text-slate-400 leading-normal max-w-xs mx-auto">
+                      Physical spotted and tagged the Hiders in real life? Hold to confirm target capture.
+                    </p>
+
+                    <div className="relative max-w-xs mx-auto">
+                      <button
+                        onMouseDown={() => { setCatchPressed(true); audio.playClick(); }}
+                        onMouseUp={() => setCatchPressed(false)}
+                        onMouseLeave={() => setCatchPressed(false)}
+                        onTouchStart={() => { setCatchPressed(true); audio.playClick(); }}
+                        onTouchEnd={() => setCatchPressed(false)}
+                        className={`w-full py-2 rounded-xl font-black text-[11px] tracking-wider text-slate-950 uppercase select-none transition-all cursor-pointer relative overflow-hidden active:scale-95 ${
+                          catchPressed ? 'bg-rose-500 text-slate-950' : 'bg-gradient-to-r from-rose-500 to-pink-500'
+                        }`}
+                      >
+                        <div
+                          className="absolute left-0 top-0 bottom-0 bg-rose-700/50 transition-all duration-75"
+                          style={{ width: `${catchProgress}%` }}
+                        />
+                        <span className="relative z-10">🚨 HOLD TO CONFIRM CAUGHT</span>
+                      </button>
+                    </div>
+                    {catchProgress > 0 && (
+                      <span className="block text-[8px] text-rose-400 animate-pulse font-mono mt-1">
+                        Syncing... {catchProgress}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Preview on Map CTA button inside question form */}
+            {mobileActiveTab === 'ASK' && qType !== null && (
+              <button
+                onClick={handlePreview}
+                className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-black text-[11px] tracking-wider uppercase transition-transform active:scale-[0.99] cursor-pointer shrink-0 mt-2"
+              >
+                🔍 Preview Query on Map
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* BOTTOM FLOATING CONFIRM ASKING OVERLAY */}
+        {previewingQuestion && (
+          <div className="absolute bottom-24 left-3 right-3 max-w-sm mx-auto bg-[#0a0e1a]/98 backdrop-blur-md border border-cyan-500 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1030] text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-2 bg-cyan-500/10 rounded-full text-cyan-400 w-fit mx-auto shrink-0 animate-bounce">
+              <Compass className="w-5 h-5" />
+            </div>
+
+            <div>
+              <span className="text-[8px] uppercase font-bold tracking-widest text-cyan-400 block">Confirm Proximity Query</span>
+              <h3 className="text-xs font-black text-slate-100 mt-1 leading-normal">{previewingQuestion.title}</h3>
+            </div>
+
+            <div className="bg-slate-950 p-3 rounded-xl text-left space-y-1.5 text-[10px]">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Hider Reward:</span>
+                <span className="text-amber-400 font-bold">{previewingQuestion.rewardDesc}</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-900 pt-1.5">
+                <span className="text-slate-400">Geospatial Type:</span>
+                <span className="text-slate-200 font-semibold">{previewingQuestion.type}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-1.5 shrink-0">
+              <button
+                onClick={handleConfirmAsk}
+                className="py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow cursor-pointer"
+              >
+                Ask Question?
+              </button>
+              <button
+                onClick={() => { setPreviewingQuestion(null); audio.playClick(); }}
+                className="py-2 bg-slate-850 hover:bg-slate-800 text-slate-300 text-xs font-black rounded-xl border border-slate-700 cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 max-w-xl mx-auto py-1">

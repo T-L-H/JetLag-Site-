@@ -93,24 +93,6 @@ export const BASE_DECK: Omit<Card, 'id'>[] = [
     costDesc: 'None.',
   })),
 
-  // Randomize (4 qty)
-  ...Array(4).fill(null).map((_, i) => ({
-    title: 'Randomize',
-    type: 'POWERUP' as const,
-    rarity: 'COMMON' as const,
-    desc: 'Reshuffles a card in your hand or draws a random power up.',
-    costDesc: 'None.',
-  })),
-
-  // Move (1 qty)
-  {
-    title: 'Move / Escape',
-    type: 'POWERUP' as const,
-    rarity: 'COMMON' as const,
-    desc: 'A rare powerup card that allows you to relocate your Transit drop pin (within small/medium: 400m; large: 800m) or escape a tight spot.',
-    costDesc: 'None.',
-  },
-
   // --- CURSES (24 cards total) ---
   {
     title: 'Curse of The Zoologist',
