@@ -1422,8 +1422,8 @@ export default function HiderView({
 
       {/* 🎁 CARD DRAFT REWARD MODAL */}
       {room.pendingDraft && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 z-[2500]">
-          <div className="bg-[#0e1322] border border-cyan-500/40 rounded-2xl md:rounded-3xl p-2.5 sm:p-5 md:p-6 shadow-2xl max-w-lg w-full max-h-[96vh] sm:max-h-[94vh] flex flex-col space-y-1.5 sm:space-y-4 text-center">
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md overflow-y-auto p-2.5 sm:p-4 z-[2500] flex justify-center items-start sm:items-center">
+          <div className="bg-[#0e1322] border border-cyan-500/40 rounded-2xl md:rounded-3xl p-2.5 sm:p-5 md:p-6 shadow-2xl max-w-lg w-full my-auto max-h-[calc(100dvh-2.5rem)] sm:max-h-[90dvh] flex flex-col space-y-1.5 sm:space-y-4 text-center">
             <div className="p-2 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto border border-cyan-500/20 shrink-0 hidden sm:block">
               <Sparkles className="w-4 h-4 animate-pulse" />
             </div>

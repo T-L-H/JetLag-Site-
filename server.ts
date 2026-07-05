@@ -319,26 +319,15 @@ app.post('/api/rooms/:code/update-location', (req, res) => {
 
   const player = room.players.find((p) => p.name === playerName);
   if (player) {
-    const isHider = room.teams[room.hiderTeamIndex]?.name === player.team;
-    if (isHider && room.hidingStationPin) {
-      player.lat = room.hidingStationPin.lat;
-      player.lng = room.hidingStationPin.lng;
-    } else {
-      player.lat = lat;
-      player.lng = lng;
-    }
+    player.lat = lat;
+    player.lng = lng;
     player.lastUpdate = Date.now();
 
     // Also update team coordinate representative
     const team = room.teams.find((t) => t.name === player.team);
     if (team) {
-      if (isHider && room.hidingStationPin) {
-        team.lat = room.hidingStationPin.lat;
-        team.lng = room.hidingStationPin.lng;
-      } else {
-        team.lat = lat;
-        team.lng = lng;
-      }
+      team.lat = lat;
+      team.lng = lng;
       team.lastActive = Date.now();
     }
   }
