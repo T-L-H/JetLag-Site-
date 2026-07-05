@@ -421,7 +421,7 @@ export default function SeekerView({
   // --- RENDERS ---
 
   // Lockout 1: Active Curses red warning cover
-  if (room.activeCurses.length > 0) {
+  if (room.activeCurses.length > 0 && !isMobileFloating) {
     const currentCurse = room.activeCurses[0];
 
     return (
@@ -501,7 +501,7 @@ export default function SeekerView({
   }
 
   // Active Question confirmation overlay
-  if (room.activeQuestion) {
+  if (room.activeQuestion && !isMobileFloating) {
     const isPhotoAnswer = room.activeQuestion.status === 'ANSWERED' && room.activeQuestion.photoUrl;
 
     return (
@@ -577,7 +577,7 @@ export default function SeekerView({
   }
 
   // Previewing question configuration
-  if (previewingQuestion) {
+  if (previewingQuestion && !isMobileFloating) {
     return (
       <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl text-center space-y-4 md:space-y-5 max-w-xl mx-auto py-5 md:py-6">
         <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto">
@@ -656,6 +656,9 @@ export default function SeekerView({
   const isVetoedPhoto = false;
 
   if (isMobileFloating) {
+    const hasCurse = room.activeCurses.length > 0;
+    const hasActiveQuestion = !!room.activeQuestion;
+
     const floatingItems = [
       { type: 'MATCHING', label: 'Matching (POI)', icon: Layers, vetoed: isVetoedMatching },
       { type: 'MEASURING', label: 'Measuring (Pin)', icon: MapPin, vetoed: isVetoedMeasuring },
@@ -669,61 +672,63 @@ export default function SeekerView({
     return (
       <div className="relative w-full h-full pointer-events-none select-none">
         {/* Left Side: 7 Vertical Icons */}
-        <div className="absolute left-3 top-20 flex flex-col space-y-2 pointer-events-auto z-[1010]">
-          {floatingItems.map((item) => {
-            const isActive = item.isSpecial 
-              ? (mobileActiveTab === 'STATUS' && qType === null)
-              : (qType === item.type && mobileActiveTab === 'ASK');
-            const IconComponent = item.icon;
-            return (
-              <button
-                key={item.type}
-                onClick={() => {
-                  audio.playClick();
-                  if (item.isSpecial) {
-                    if (mobileActiveTab === 'STATUS' && qType === null) {
-                      setMobileActiveTab('ASK');
+        {!hasCurse && !hasActiveQuestion && (
+          <div className="absolute left-3 top-20 flex flex-col space-y-2 pointer-events-auto z-[1010]">
+            {floatingItems.map((item) => {
+              const isActive = item.isSpecial 
+                ? (mobileActiveTab === 'STATUS' && qType === null)
+                : (qType === item.type && mobileActiveTab === 'ASK');
+              const IconComponent = item.icon;
+              return (
+                <button
+                  key={item.type}
+                  onClick={() => {
+                    audio.playClick();
+                    if (item.isSpecial) {
+                      if (mobileActiveTab === 'STATUS' && qType === null) {
+                        setMobileActiveTab('ASK');
+                      } else {
+                        setMobileActiveTab('STATUS');
+                        setQType(null);
+                      }
                     } else {
-                      setMobileActiveTab('STATUS');
-                      setQType(null);
+                      if (qType === item.type && mobileActiveTab === 'ASK') {
+                        setQType(null);
+                      } else {
+                        setQType(item.type as any);
+                        setMobileActiveTab('ASK');
+                      }
                     }
-                  } else {
-                    if (qType === item.type && mobileActiveTab === 'ASK') {
-                      setQType(null);
-                    } else {
-                      setQType(item.type as any);
-                      setMobileActiveTab('ASK');
-                    }
-                  }
-                }}
-                disabled={item.vetoed}
-                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all relative shadow-lg ${
-                  item.vetoed
-                    ? 'bg-rose-950/40 border-rose-900/40 text-rose-500/40 cursor-not-allowed'
-                    : isActive
-                    ? item.isSpecial
-                      ? 'bg-amber-500 border-amber-400 text-slate-950 scale-105 shadow-amber-500/20'
-                      : 'bg-cyan-500 border-cyan-400 text-slate-950 scale-105 shadow-cyan-500/20'
-                    : item.isSpecial
-                    ? 'bg-slate-950/90 hover:bg-slate-900 border-amber-500/30 text-amber-400/80'
-                    : 'bg-slate-950/90 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-                }`}
-                title={item.label}
-              >
-                <IconComponent className="w-5 h-5 stroke-[2.5]" />
-                {item.vetoed && (
-                  <span className="absolute -top-1 -right-1 text-[7px] bg-rose-500 text-slate-950 font-black px-1 rounded uppercase scale-75">
-                    Banned
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  }}
+                  disabled={item.vetoed}
+                  className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all relative shadow-lg ${
+                    item.vetoed
+                      ? 'bg-rose-950/40 border-rose-900/40 text-rose-500/40 cursor-not-allowed'
+                      : isActive
+                      ? item.isSpecial
+                        ? 'bg-amber-500 border-amber-400 text-slate-950 scale-105 shadow-amber-500/20'
+                        : 'bg-cyan-500 border-cyan-400 text-slate-950 scale-105 shadow-cyan-500/20'
+                      : item.isSpecial
+                      ? 'bg-slate-950/90 hover:bg-slate-900 border-amber-500/30 text-amber-400/80'
+                      : 'bg-slate-950/90 hover:bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                  title={item.label}
+                >
+                  <IconComponent className="w-5 h-5 stroke-[2.5]" />
+                  {item.vetoed && (
+                    <span className="absolute -top-1 -right-1 text-[7px] bg-rose-500 text-slate-950 font-black px-1 rounded uppercase scale-75">
+                      Banned
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* BOTTOM FLOATING PARAMETER / FORM OVERLAY */}
-        {((qType !== null && mobileActiveTab === 'ASK') || (mobileActiveTab === 'STATUS' && qType === null)) && !previewingQuestion && (
-          <div className="absolute bottom-24 left-3 right-3 max-w-sm mx-auto bg-[#0a0e1a]/95 backdrop-blur-md border border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1020] text-left animate-in fade-in slide-in-from-bottom-4 duration-200">
+        {!hasCurse && !hasActiveQuestion && ((qType !== null && mobileActiveTab === 'ASK') || (mobileActiveTab === 'STATUS' && qType === null)) && !previewingQuestion && (
+          <div className="absolute bottom-6 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-slate-800 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1020] text-left animate-in fade-in slide-in-from-bottom-4 duration-200">
             {/* Header */}
             <div className="flex justify-between items-center pb-2 border-b border-slate-900 shrink-0">
               <div>
@@ -821,7 +826,7 @@ export default function SeekerView({
                     </div>
 
                     {showSuggestions && addressSuggestions.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full mt-1 bg-slate-950 border border-slate-850 rounded-xl shadow-2xl overflow-hidden max-h-36 overflow-y-auto z-[1050]">
+                      <div className="relative mt-1 bg-slate-950 border border-slate-850 rounded-xl shadow-2xl overflow-hidden max-h-32 overflow-y-auto z-[1050]">
                         {addressSuggestions.map((s, i) => (
                           <button
                             key={i}
@@ -1106,15 +1111,15 @@ export default function SeekerView({
         )}
 
         {/* BOTTOM FLOATING CONFIRM ASKING OVERLAY */}
-        {previewingQuestion && (
-          <div className="absolute bottom-24 left-3 right-3 max-w-sm mx-auto bg-[#0a0e1a]/98 backdrop-blur-md border border-cyan-500 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1030] text-center animate-in fade-in zoom-in-95 duration-200">
+        {!hasCurse && !hasActiveQuestion && previewingQuestion && (
+          <div className="absolute bottom-6 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-cyan-500 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1030] text-center animate-in fade-in zoom-in-95 duration-200">
             <div className="p-2 bg-cyan-500/10 rounded-full text-cyan-400 w-fit mx-auto shrink-0 animate-bounce">
               <Compass className="w-5 h-5" />
             </div>
 
             <div>
-              <span className="text-[8px] uppercase font-bold tracking-widest text-cyan-400 block">Confirm Proximity Query</span>
-              <h3 className="text-xs font-black text-slate-100 mt-1 leading-normal">{previewingQuestion.title}</h3>
+              <span className="text-[8px] uppercase font-bold tracking-widest text-cyan-400 block font-sans">Confirm Proximity Query</span>
+              <h3 className="text-xs font-black text-slate-100 mt-1 leading-normal font-sans">{previewingQuestion.title}</h3>
             </div>
 
             <div className="bg-slate-950 p-3 rounded-xl text-left space-y-1.5 text-[10px]">
@@ -1131,17 +1136,163 @@ export default function SeekerView({
             <div className="grid grid-cols-2 gap-2.5 pt-1.5 shrink-0">
               <button
                 onClick={handleConfirmAsk}
-                className="py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow cursor-pointer"
+                className="py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow cursor-pointer uppercase font-sans"
               >
-                Ask Question?
+                Ask Question
               </button>
               <button
                 onClick={() => { setPreviewingQuestion(null); audio.playClick(); }}
-                className="py-2 bg-slate-850 hover:bg-slate-800 text-slate-300 text-xs font-black rounded-xl border border-slate-700 cursor-pointer"
+                className="py-2 bg-slate-850 hover:bg-slate-800 text-slate-300 text-xs font-black rounded-xl border border-slate-700 cursor-pointer uppercase font-sans"
               >
                 Cancel
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ACTIVE QUESTION OVERLAY FOR MOBILE */}
+        {!hasCurse && hasActiveQuestion && (
+          <div className="absolute bottom-6 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1040] text-left animate-in fade-in slide-in-from-bottom-4 duration-200 font-sans">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-900 shrink-0">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">PENDING RESOLUTION</span>
+                <h4 className="text-xs font-black text-slate-100 uppercase mt-0.5 leading-normal">{room.activeQuestion.title}</h4>
+              </div>
+            </div>
+
+            <div className="max-h-56 overflow-y-auto pr-1 space-y-2.5 text-[10px]">
+              {room.activeQuestion.status === 'PENDING' ? (
+                <div className="py-3 bg-slate-900/50 border border-slate-900/80 rounded-xl text-center">
+                  <p className="text-[10px] text-slate-400 animate-pulse font-medium">
+                    Waiting for Hider to review/answer/veto...
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {/* Photo answer view */}
+                  {room.activeQuestion.status === 'ANSWERED' && room.activeQuestion.photoUrl && (
+                    <div className="space-y-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-900">
+                      <span className="text-[8px] font-bold text-amber-400 uppercase tracking-widest block font-sans">📸 Hider Photograph:</span>
+                      <div className="border border-slate-900 rounded-lg overflow-hidden max-h-40 shadow-inner">
+                        <img src={room.activeQuestion.photoUrl} alt="Hider upload" className="w-full h-full object-cover" />
+                      </div>
+                      <a
+                        href={room.activeQuestion.photoUrl}
+                        download={`jetlag_photo_${room.activeQuestion.selectedSubject?.replace(/\s+/g, '_')}.png`}
+                        className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black rounded-lg shadow inline-flex items-center justify-center space-x-1 transition-transform"
+                      >
+                        <Image className="w-3.5 h-3.5" />
+                        <span>Save Photo</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {room.activeQuestion.mathResult && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl text-left space-y-1">
+                      <h4 className="text-[9px] font-black text-emerald-400 uppercase tracking-wider">Geospatial Result</h4>
+                      <p className="text-[10px] text-slate-300 leading-normal">{room.activeQuestion.mathResult.description}</p>
+                      <div className="border-t border-emerald-950/50 pt-1 flex justify-between items-center text-[9px]">
+                        <span className="text-slate-400 font-sans">Search cells eliminated:</span>
+                        <span className="text-emerald-400 font-bold">-{room.activeQuestion.mathResult.eliminatedCount} cells</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {room.activeQuestion.status === 'VETOED' && (
+                    <div className="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-left space-y-1">
+                      <h4 className="text-[9px] font-black text-rose-400 uppercase tracking-wider font-sans">Question Vetoed</h4>
+                      <p className="text-[10px] text-slate-300 leading-normal font-sans">
+                        Hiders used their Veto Powerup card. Questions of this type are now banned.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* CTA action button */}
+            {room.activeQuestion.status !== 'PENDING' && (
+              <button
+                onClick={() => {
+                  onClearQuestion();
+                  audio.playClick();
+                }}
+                className="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl shadow cursor-pointer uppercase tracking-wider font-sans"
+              >
+                Close & Ask New Question
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ACTIVE CURSES OVERLAY FOR MOBILE */}
+        {hasCurse && (
+          <div className="absolute bottom-6 left-3 right-3 max-w-sm mx-auto bg-rose-955/85 backdrop-blur-md border border-rose-500/40 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1040] text-left animate-in fade-in slide-in-from-bottom-4 duration-200 font-sans">
+            <div className="flex justify-between items-center pb-2 border-b border-rose-950/40 shrink-0">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-wider text-rose-400">CURSE OF THE HIDERS ACTIVE</span>
+                <h4 className="text-xs font-black text-slate-100 uppercase mt-0.5 leading-normal">{room.activeCurses[0].title}</h4>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-[10px]">
+              <div>
+                <span className="text-rose-400 font-bold uppercase text-[8px] tracking-wide block">Seeker Penalty:</span>
+                <p className="text-slate-200 font-medium leading-normal">{room.activeCurses[0].seekerEffect}</p>
+              </div>
+              <div className="border-t border-rose-950 pt-2">
+                <span className="text-rose-400 font-bold uppercase text-[8px] tracking-wide block">Real-life Dismissal Task:</span>
+                <p className="text-slate-200 font-medium leading-normal">{room.activeCurses[0].dismissalDesc}</p>
+              </div>
+            </div>
+
+            <div className="pt-1">
+              {room.activeCurses[0].pendingConfirmation ? (
+                <div className="w-full py-2 bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-[10px] rounded-xl flex items-center justify-center space-x-1">
+                  <span className="animate-pulse">⌛ Claim Submitted! Waiting for Hiders...</span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setConfirmingCurseId(room.activeCurses[0].id);
+                    audio.playClick();
+                  }}
+                  className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-slate-950 font-black text-[11px] rounded-xl shadow cursor-pointer uppercase transition-all font-sans"
+                >
+                  Did you fulfill curse yet?
+                </button>
+              )}
+            </div>
+
+            {confirmingCurseId && (
+              <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-[2100]">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl max-w-xs w-full space-y-3 text-center">
+                  <AlertCircle className="w-7 h-7 text-amber-400 mx-auto animate-bounce" />
+                  <h3 className="text-xs font-black text-slate-100 font-sans">Fulfill Confirmation</h3>
+                  <p className="text-[10px] text-slate-300 leading-normal font-sans">
+                    Fulfill the curse parameters in the real world? This sends a request to the Hiders.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        onDismissCurseRequest(confirmingCurseId);
+                        setConfirmingCurseId(null);
+                        audio.playSuccess();
+                      }}
+                      className="py-1.5 bg-rose-500 text-slate-950 text-xs font-black rounded-xl cursor-pointer uppercase font-sans"
+                    >
+                      Yes, Send
+                    </button>
+                    <button
+                      onClick={() => { setConfirmingCurseId(null); audio.playClick(); }}
+                      className="py-1.5 bg-slate-800 text-slate-300 text-xs font-black rounded-xl border border-slate-700 cursor-pointer uppercase font-sans"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -374,15 +374,12 @@ export default function App() {
 
   // Drag and drop / Pin placement coord handlers
   const handleSetPinDirectly = (lat: number, lng: number, pinType: 'CUSTOM' | 'TRANSIT') => {
-    const isConfirmed = window.confirm(`Would you like to set your pin at this location?`);
-    if (isConfirmed) {
-      if (pinType === 'CUSTOM') {
-        setCustomPin({ lat, lng });
-      } else {
-        setTransitPin({ lat, lng });
-      }
-      audio.playSuccess();
+    if (pinType === 'CUSTOM') {
+      setCustomPin({ lat, lng });
+    } else {
+      setTransitPin({ lat, lng });
     }
+    audio.playSuccess();
   };
 
   const handlePinDroppedOnMap = (lat: number, lng: number, forceCustom: boolean = false) => {
