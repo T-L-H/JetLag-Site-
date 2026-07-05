@@ -117,4 +117,5 @@ export interface RoomState {
   hidingStationPin?: { lat: number; lng: number } | null;
   history: string[]; // List of events that occurred
   pois?: POI[];
+  drawnCurseIds?: string[];
 }

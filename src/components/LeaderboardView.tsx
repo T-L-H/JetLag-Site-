@@ -1,7 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { RoomState } from '../types';
-import { Trophy, RefreshCw, Sparkles, Image, ShieldAlert, CheckCircle, Flame, ArrowRight, Award } from 'lucide-react';
-import html2canvas from 'html2canvas';
+import { Trophy, RefreshCw, Sparkles, ShieldAlert, CheckCircle, Flame, ArrowRight, Award } from 'lucide-react';
 import audio from '../lib/audio';
 
 interface LeaderboardViewProps {
@@ -17,11 +16,8 @@ export default function LeaderboardView({
   onResetGame,
   isGM,
 }: LeaderboardViewProps) {
-  const exportRef = useRef<HTMLDivElement>(null);
-  const [exporting, setExporting] = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
   const [winnerDismissed, setWinnerDismissed] = useState(false);
-  const [exportedImgSrc, setExportedImgSrc] = useState<string | null>(null);
 
   // Sort teams by score descending (highest hiding time wins!)
   const sortedTeams = [...room.teams].sort((a, b) => b.score - a.score);
@@ -32,45 +28,6 @@ export default function LeaderboardView({
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
     return `${m}m ${s}s`;
-  };
-
-  const handleExportImage = () => {
-    if (!exportRef.current) return;
-    setExporting(true);
-    audio.playSonar();
-
-    setTimeout(() => {
-      html2canvas(exportRef.current!, {
-        backgroundColor: '#0c0f16',
-        scale: 2, // high quality
-        useCORS: true,
-        allowTaint: true,
-      })
-        .then((canvas) => {
-          const imgData = canvas.toDataURL('image/png');
-          setExportedImgSrc(imgData);
-
-          // Attempt direct browser trigger
-          try {
-            const link = document.createElement('a');
-            link.href = imgData;
-            link.download = `jet_tracker_leaderboard_${room.code}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          } catch (e) {
-            console.warn('Programmatic download blocked by sandbox, showing modal fallback', e);
-          }
-
-          setExporting(false);
-          audio.playSuccess();
-        })
-        .catch((err) => {
-          console.error('Export failed:', err);
-          alert('Failed to generate image. Please try opening the app in a new tab.');
-          setExporting(false);
-        });
-    }, 200);
   };
 
   if (room.gamePhase === 'INTERMISSION') {
@@ -174,7 +131,6 @@ export default function LeaderboardView({
   return (
     <div className="max-w-xl mx-auto py-6 space-y-6">
       <div
-        ref={exportRef}
         className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 relative overflow-hidden"
       >
         <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-orange-500" />
@@ -242,24 +198,14 @@ export default function LeaderboardView({
           })}
         </div>
 
-        {/* Export image section */}
-        <div className="pt-4 border-t border-slate-850/60 flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={handleExportImage}
-            disabled={exporting}
-            className="flex-1 py-3 bg-slate-950 hover:bg-slate-900 text-slate-200 hover:text-white border border-slate-800 rounded-xl text-xs font-black flex items-center justify-center space-x-1.5 transition-all shadow cursor-pointer"
-          >
-            <Image className="w-4 h-4 text-cyan-400 animate-pulse" />
-            <span>{exporting ? 'Rendering canvas...' : 'Export as Picture (PNG)'}</span>
-          </button>
-
+        <div className="pt-4 border-t border-slate-850/60 flex justify-center">
           {isGM && (
             <button
               onClick={() => {
                 onResetGame();
                 audio.playSuccess();
               }}
-              className="flex-1 py-3 bg-rose-500 hover:bg-rose-400 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center space-x-1.5 transition-all shadow cursor-pointer"
+              className="w-full py-3 bg-rose-500 hover:bg-rose-400 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center space-x-1.5 transition-all shadow cursor-pointer"
             >
               <RefreshCw className="w-4 h-4 animate-spin" style={{ animationDuration: '4s' }} />
               <span>GM: Reset & Rematch</span>
@@ -299,7 +245,7 @@ export default function LeaderboardView({
             </div>
 
             <p className="text-[11px] text-slate-400 leading-normal">
-              Congratulations to all operatives! The hunt has concluded. Check out the official results PNG and save your victory card.
+              Congratulations to all operatives! The hunt has concluded. Take a screenshot of the results on your device to share!
             </p>
 
             <button
@@ -311,46 +257,6 @@ export default function LeaderboardView({
             >
               View Grand Standings
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Programmatic fallback download modal */}
-      {exportedImgSrc && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black text-amber-400 uppercase tracking-widest">🏆 Leaderboard Rendered!</h3>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              An automatic download was triggered. If it was blocked by your browser, you can **long-press** or **right-click** on the image below to save it directly:
-            </p>
-            <div className="border border-slate-800 rounded-2xl overflow-hidden max-h-64 overflow-y-auto bg-slate-950">
-              <img src={exportedImgSrc} alt="Leaderboard Results" className="w-full object-contain" referrerPolicy="no-referrer" />
-            </div>
-            <div className="flex space-x-3 pt-2">
-              <button
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.href = exportedImgSrc;
-                  link.download = `jet_tracker_leaderboard_${room.code}.png`;
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  audio.playSuccess();
-                }}
-                className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow transition-all"
-              >
-                Download Again
-              </button>
-              <button
-                onClick={() => {
-                  setExportedImgSrc(null);
-                  audio.playClick();
-                }}
-                className="flex-1 py-2.5 bg-slate-850 hover:bg-slate-800 text-slate-300 font-bold text-xs rounded-xl transition-all"
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}

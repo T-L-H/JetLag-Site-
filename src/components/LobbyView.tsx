@@ -866,7 +866,7 @@ export default function LobbyView({
         {/* Modal/Popup Selection Overlay */}
         {joinRoomState && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-md w-full relative overflow-hidden">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-md w-[calc(100%-1rem)] md:w-full relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
               
               <h3 className="text-lg font-bold text-slate-100 flex items-center space-x-2">

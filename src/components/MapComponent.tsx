@@ -621,7 +621,7 @@ export default function MapComponent({
   ]);
 
   return (
-    <div className="relative w-full h-full min-h-[400px] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+    <div className="relative w-full h-full min-h-full md:min-h-[400px] md:rounded-2xl overflow-hidden md:border md:border-slate-800 md:shadow-2xl">
       <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '100%' }} />
 
       {selectionMode && (

@@ -4,6 +4,24 @@ import { MATCHING_POIS, MEASURING_POIS, PHOTO_SUBJECTS } from '../lib/cardsData'
 import { Radio, MapPin, Eye, Compass, ShieldAlert, Sparkles, Layers, Image, Check, X, Shield, Camera, AlertCircle, HelpCircle } from 'lucide-react';
 import audio from '../lib/audio';
 
+// Helper function to check if a pin is vetoed based on lat/lng proximity (~100m)
+function isPinVetoed(lat: number, lng: number, vetoedTypes: string[]): boolean {
+  const threshold = 0.0009; // Approx 100 meters
+  for (const v of vetoedTypes) {
+    if (v.startsWith('MEASURING:PIN:')) {
+      const parts = v.split(':');
+      const vLat = parseFloat(parts[2]);
+      const vLng = parseFloat(parts[3]);
+      if (!isNaN(vLat) && !isNaN(vLng)) {
+        if (Math.abs(lat - vLat) < threshold && Math.abs(lng - vLng) < threshold) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 interface SeekerViewProps {
   room: RoomState;
   userName: string;
@@ -119,6 +137,64 @@ export default function SeekerView({
     }
   }, [room.activeCurses.length]);
 
+  // Auto-select first non-banned MATCHING POI if current is banned
+  useEffect(() => {
+    const isCurrentBanned = room.vetoedTypes.includes(`MATCHING:${matchingPoi}`);
+    if (isCurrentBanned) {
+      const firstAvailable = MATCHING_POIS.find(p => !room.vetoedTypes.includes(`MATCHING:${p}`));
+      if (firstAvailable) {
+        setMatchingPoi(firstAvailable);
+      }
+    }
+  }, [room.vetoedTypes, matchingPoi, setMatchingPoi]);
+
+  // Auto-select first non-banned TENTACLES POI if current is banned
+  useEffect(() => {
+    const isCurrentBanned = room.vetoedTypes.includes(`TENTACLES:POI:${tentaclePoi}`);
+    if (isCurrentBanned) {
+      const options = ['Museums', 'Libraries', 'Movie Theatres', 'Hospitals', 'Metro Lines', 'Zoos', 'Aquariums', 'Amusement Parks'];
+      const firstAvailable = options.find(p => !room.vetoedTypes.includes(`TENTACLES:POI:${p}`));
+      if (firstAvailable) {
+        setTentaclePoi(firstAvailable);
+      }
+    }
+  }, [room.vetoedTypes, tentaclePoi, setTentaclePoi]);
+
+  // Auto-select first non-banned thermometer distance
+  useEffect(() => {
+    const isCurrentBanned = room.vetoedTypes.includes(`THERMOMETER:DIST:${thermometerDistance}`);
+    if (isCurrentBanned) {
+      const options = [0.5, 3.0, 10.0, 50.0];
+      const firstAvailable = options.find(d => !room.vetoedTypes.includes(`THERMOMETER:DIST:${d}`));
+      if (firstAvailable !== undefined) {
+        setThermometerDistance(firstAvailable);
+      }
+    }
+  }, [room.vetoedTypes, thermometerDistance, setThermometerDistance]);
+
+  // Auto-select first non-banned radar distance
+  useEffect(() => {
+    const isCurrentBanned = room.vetoedTypes.includes(`RADAR:DIST:${radarDistance}`);
+    if (isCurrentBanned) {
+      const options = [0.25, 0.5, 1.0, 3.0, 5.0, 10.0, 25.0, 50.0];
+      const firstAvailable = options.find(d => !room.vetoedTypes.includes(`RADAR:DIST:${d}`));
+      if (firstAvailable !== undefined) {
+        setRadarDistance(firstAvailable);
+      }
+    }
+  }, [room.vetoedTypes, radarDistance, setRadarDistance]);
+
+  // Set default photo subject based on game size (filtering out banned options)
+  useEffect(() => {
+    const subjects = PHOTO_SUBJECTS[room.gameSize] || PHOTO_SUBJECTS.M;
+    const firstNonBanned = subjects.find(subj => !room.vetoedTypes.includes(`PHOTO:SUBJ:${subj}`));
+    if (firstNonBanned) {
+      setPhotoSubject(firstNonBanned);
+    } else {
+      setPhotoSubject(subjects[0]);
+    }
+  }, [room.gameSize, room.vetoedTypes]);
+
   // Handle Catch holding
   useEffect(() => {
     let interval: any;
@@ -225,6 +301,10 @@ export default function SeekerView({
     let proposed: Omit<ActiveQuestion, 'id' | 'status'>;
 
     if (qType === 'MATCHING') {
+      if (room.vetoedTypes.includes(`MATCHING:${matchingPoi}`)) {
+        alert(`This MATCHING POI "${matchingPoi}" has been vetoed and is banned!`);
+        return;
+      }
       proposed = {
         type: 'MATCHING',
         title: `Is your nearest "${matchingPoi}" landmark the same as my nearest "${matchingPoi}"?`,
@@ -236,6 +316,10 @@ export default function SeekerView({
     } else if (qType === 'MEASURING') {
       if (!customPin) {
         alert('Please drop a Custom Target Pin on the map first.');
+        return;
+      }
+      if (isPinVetoed(customPin.lat, customPin.lng, room.vetoedTypes)) {
+        alert('This custom pin location (or one very close to it) has been vetoed and is banned!');
         return;
       }
       proposed = {
@@ -251,6 +335,10 @@ export default function SeekerView({
         alert('You must start the thermometer path first.');
         return;
       }
+      if (room.vetoedTypes.includes(`THERMOMETER:DIST:${thermometerDistance}`)) {
+        alert(`This THERMOMETER distance of ${thermometerDistance} mi has been vetoed and is banned!`);
+        return;
+      }
       proposed = {
         type: 'THERMOMETER',
         title: `I have travelled ${thermometerDistance} mi from my starting pin. Am I hotter (closer to you) or colder (further from you)?`,
@@ -262,6 +350,10 @@ export default function SeekerView({
         distanceValue: thermometerDistance,
       };
     } else if (qType === 'RADAR') {
+      if (room.vetoedTypes.includes(`RADAR:DIST:${radarDistance}`)) {
+        alert(`This RADAR radius of ${radarDistance} mi has been vetoed and is banned!`);
+        return;
+      }
       proposed = {
         type: 'RADAR',
         title: `Are you within a ${radarDistance} mi radius of my current position?`,
@@ -271,6 +363,10 @@ export default function SeekerView({
         distanceValue: radarDistance,
       };
     } else if (qType === 'TENTACLES') {
+      if (room.vetoedTypes.includes(`TENTACLES:POI:${tentaclePoi}`)) {
+        alert(`This TENTACLES POI "${tentaclePoi}" has been vetoed and is banned!`);
+        return;
+      }
       proposed = {
         type: 'TENTACLES',
         title: `Of all "${tentaclePoi}" within a ${tentacleDistance} mi radius of me, which are you closest to?`,
@@ -282,6 +378,10 @@ export default function SeekerView({
       };
     } else {
       // PHOTO
+      if (room.vetoedTypes.includes(`PHOTO:SUBJ:${photoSubject}`)) {
+        alert(`This PHOTO subject "${photoSubject}" has been vetoed and is banned!`);
+        return;
+      }
       proposed = {
         type: 'PHOTO',
         title: `Upload a real-time native camera photograph of subject: "${photoSubject}"`,
@@ -322,7 +422,7 @@ export default function SeekerView({
     const currentCurse = room.activeCurses[0];
 
     return (
-      <div className="bg-rose-950/90 backdrop-blur-md border border-rose-500/40 rounded-3xl p-6 shadow-2xl text-center space-y-6 max-w-xl mx-auto py-8 animate-pulse">
+      <div className="bg-rose-950/90 backdrop-blur-md border border-rose-500/40 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl text-center space-y-4 md:space-y-6 max-w-xl mx-auto py-5 md:py-8 animate-pulse">
         <div className="p-4 bg-rose-500 text-slate-950 rounded-full w-fit mx-auto shadow-lg shadow-rose-950">
           <ShieldAlert className="w-10 h-10 animate-spin" />
         </div>
@@ -366,7 +466,7 @@ export default function SeekerView({
 
         {confirmingCurseId && (
           <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-sm flex items-center justify-center p-4 z-[2100]">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4 text-center">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-sm w-[calc(100%-1rem)] md:w-full space-y-3.5 md:space-y-4 text-center">
               <AlertCircle className="w-8 h-8 text-amber-400 mx-auto animate-bounce" />
               <h3 className="text-sm font-black text-slate-100">Fulfill Confirmation</h3>
               <p className="text-xs text-slate-300 leading-normal">
@@ -402,7 +502,7 @@ export default function SeekerView({
     const isPhotoAnswer = room.activeQuestion.status === 'ANSWERED' && room.activeQuestion.photoUrl;
 
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-xl mx-auto py-6 space-y-4 text-center">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-xl mx-auto py-5 md:py-6 space-y-3 md:space-y-4 text-center">
         <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto">
           <Radio className="w-6 h-6 animate-pulse" />
         </div>
@@ -476,7 +576,7 @@ export default function SeekerView({
   // Previewing question configuration
   if (previewingQuestion) {
     return (
-      <div className="bg-slate-900 border border-cyan-500/30 rounded-3xl p-6 shadow-2xl text-center space-y-5 max-w-xl mx-auto py-6">
+      <div className="bg-slate-900 border border-cyan-500/30 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl text-center space-y-4 md:space-y-5 max-w-xl mx-auto py-5 md:py-6">
         <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto">
           <Compass className="w-6 h-6 animate-spin" />
         </div>
@@ -521,22 +621,22 @@ export default function SeekerView({
 
   if (room.gamePhase === 'HIDING') {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-xl mx-auto py-8 space-y-5 text-center">
-        <div className="p-4 bg-amber-500/10 rounded-2xl text-amber-400 w-fit mx-auto animate-pulse">
-          <ShieldAlert className="w-8 h-8" />
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-xl md:shadow-2xl max-w-xl mx-auto py-5 md:py-8 space-y-4 md:space-y-5 text-center">
+        <div className="p-2.5 md:p-4 bg-amber-500/10 rounded-xl md:rounded-2xl text-amber-400 w-fit mx-auto animate-pulse">
+          <ShieldAlert className="w-6 h-6 md:w-8 md:h-8" />
         </div>
 
-        <div className="space-y-2">
-          <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 font-mono">Hider Setup In Progress</span>
-          <h3 className="text-base font-black text-slate-100">Waiting for Hider to Drop Pin</h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+        <div className="space-y-1.5 md:space-y-2">
+          <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest text-amber-400 font-mono">Hider Setup In Progress</span>
+          <h3 className="text-sm md:text-base font-black text-slate-100">Waiting for Hider to Drop Pin</h3>
+          <p className="text-[11px] md:text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
             The hider team is currently selecting their starting coordinates and transit station pin. Proximity questions and tracking status will unlock once the hider is ready.
           </p>
         </div>
 
-        <div className="bg-slate-950/80 border border-slate-850 p-4 rounded-2xl max-w-xs mx-auto">
-          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Current Hider Team:</span>
-          <span className="text-sm font-black text-slate-200 mt-1 block font-sans">
+        <div className="bg-slate-950/80 border border-slate-850 p-3 md:p-4 rounded-xl md:rounded-2xl max-w-xs mx-auto">
+          <span className="text-[8px] md:text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Current Hider Team:</span>
+          <span className="text-xs md:text-sm font-black text-slate-200 mt-1 block font-sans">
             🏆 {room.teams[room.hiderTeamIndex]?.name || 'Unknown'}
           </span>
         </div>
@@ -544,13 +644,13 @@ export default function SeekerView({
     );
   }
 
-  // Normal Seeker Menu Setup
-  const isVetoedMatching = room.vetoedTypes.includes(matchingPoi);
-  const isVetoedMeasuring = room.vetoedTypes.includes('MEASURING');
-  const isVetoedThermometer = room.vetoedTypes.includes('THERMOMETER');
-  const isVetoedRadar = room.vetoedTypes.includes('RADAR');
-  const isVetoedTentacles = room.vetoedTypes.includes('TENTACLES');
-  const isVetoedPhoto = room.vetoedTypes.includes('PHOTO');
+  // Normal Seeker Menu Setup (Vetoes are now option-specific)
+  const isVetoedMatching = false;
+  const isVetoedMeasuring = false;
+  const isVetoedThermometer = false;
+  const isVetoedRadar = false;
+  const isVetoedTentacles = false;
+  const isVetoedPhoto = false;
 
   return (
     <div className="space-y-4 max-w-xl mx-auto py-1">
@@ -643,11 +743,14 @@ export default function SeekerView({
                         }}
                         className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
                       >
-                        {MATCHING_POIS.map((p) => (
-                          <option key={p} value={p}>
-                            {p} {room.vetoedTypes.includes(p) ? '(BANNED)' : ''}
-                          </option>
-                        ))}
+                        {MATCHING_POIS.map((p) => {
+                          const isVetoed = room.vetoedTypes.includes(`MATCHING:${p}`);
+                          return (
+                            <option key={p} value={p} disabled={isVetoed}>
+                              {p} {isVetoed ? '(BANNED)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-normal">
@@ -720,6 +823,13 @@ export default function SeekerView({
                       <p className="text-[10px] text-amber-400 font-bold leading-normal">{geocodingError}</p>
                     )}
 
+                    {customPin && isPinVetoed(customPin.lat, customPin.lng, room.vetoedTypes) && (
+                      <div className="bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl flex items-center space-x-2 text-xs text-rose-300">
+                        <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                        <span>This pin location (or one close to it) has been vetoed! Select another spot.</span>
+                      </div>
+                    )}
+
                     {customPin ? (
                       <div className="bg-cyan-500/10 border border-cyan-500/20 p-3 rounded-xl flex items-center justify-between text-xs text-cyan-300">
                         <div>
@@ -750,10 +860,22 @@ export default function SeekerView({
                         }}
                         className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200"
                       >
-                        <option value={0.5}>0.5 miles (805m)</option>
-                        <option value={3.0}>3.0 miles (4.8km)</option>
-                        {room.gameSize !== 'S' && <option value={10.0}>10.0 miles (16km)</option>}
-                        {room.gameSize === 'L' && <option value={50.0}>50.0 miles (80km)</option>}
+                        <option value={0.5} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:0.5')}>
+                          0.5 miles (805m) {room.vetoedTypes.includes('THERMOMETER:DIST:0.5') ? '(BANNED)' : ''}
+                        </option>
+                        <option value={3.0} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:3')}>
+                          3.0 miles (4.8km) {room.vetoedTypes.includes('THERMOMETER:DIST:3') ? '(BANNED)' : ''}
+                        </option>
+                        {room.gameSize !== 'S' && (
+                          <option value={10.0} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:10')}>
+                            10.0 miles (16km) {room.vetoedTypes.includes('THERMOMETER:DIST:10') ? '(BANNED)' : ''}
+                          </option>
+                        )}
+                        {room.gameSize === 'L' && (
+                          <option value={50.0} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:50')}>
+                            50.0 miles (80km) {room.vetoedTypes.includes('THERMOMETER:DIST:50') ? '(BANNED)' : ''}
+                          </option>
+                        )}
                       </select>
                     </div>
 
@@ -797,14 +919,30 @@ export default function SeekerView({
                         }}
                         className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200"
                       >
-                        <option value={0.25}>0.25 miles (400m)</option>
-                        <option value={0.50}>0.50 miles (800m)</option>
-                        <option value={1.00}>1.00 mile (1.6km)</option>
-                        <option value={3.00}>3.00 miles (4.8km)</option>
-                        <option value={5.00}>5.00 miles (8.0km)</option>
-                        <option value={10.00}>10.00 miles (16km)</option>
-                        <option value={25.00}>25.00 miles (40km)</option>
-                        <option value={50.00}>50.00 miles (80km)</option>
+                        <option value={0.25} disabled={room.vetoedTypes.includes('RADAR:DIST:0.25')}>
+                          0.25 miles (400m) {room.vetoedTypes.includes('RADAR:DIST:0.25') ? '(BANNED)' : ''}
+                        </option>
+                        <option value={0.50} disabled={room.vetoedTypes.includes('RADAR:DIST:0.5')}>
+                          0.50 miles (800m) {room.vetoedTypes.includes('RADAR:DIST:0.5') ? '(BANNED)' : ''}
+                        </option>
+                        <option value={1.00} disabled={room.vetoedTypes.includes('RADAR:DIST:1')}>
+                          1.00 mile (1.6km) {room.vetoedTypes.includes('RADAR:DIST:1') ? '(BANNED)' : ''}
+                        </option>
+                        <option value={3.00} disabled={room.vetoedTypes.includes('RADAR:DIST:3')}>
+                          3.00 miles (4.8km) {room.vetoedTypes.includes('RADAR:DIST:3') ? '(BANNED)' : ''}
+                        </option>
+                        <option value={5.00} disabled={room.vetoedTypes.includes('RADAR:DIST:5')}>
+                          5.00 miles (8.0km) {room.vetoedTypes.includes('RADAR:DIST:5') ? '(BANNED)' : ''}
+                        </option>
+                        <option value={10.00} disabled={room.vetoedTypes.includes('RADAR:DIST:10')}>
+                          10.00 miles (16km) {room.vetoedTypes.includes('RADAR:DIST:10') ? '(BANNED)' : ''}
+                        </option>
+                        <option value={25.00} disabled={room.vetoedTypes.includes('RADAR:DIST:25')}>
+                          25.00 miles (40km) {room.vetoedTypes.includes('RADAR:DIST:25') ? '(BANNED)' : ''}
+                        </option>
+                        <option value={50.00} disabled={room.vetoedTypes.includes('RADAR:DIST:50')}>
+                          50.00 miles (80km) {room.vetoedTypes.includes('RADAR:DIST:50') ? '(BANNED)' : ''}
+                        </option>
                       </select>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-normal">
@@ -827,16 +965,16 @@ export default function SeekerView({
                           }}
                           className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200"
                         >
-                          <option value="Museums">Museums (1mi)</option>
-                          <option value="Libraries">Libraries (1mi)</option>
-                          <option value="Movie Theatres">Movie Theatres (1mi)</option>
-                          <option value="Hospitals">Hospitals (1mi)</option>
+                          <option value="Museums" disabled={room.vetoedTypes.includes('TENTACLES:POI:Museums')}>Museums (1mi) {room.vetoedTypes.includes('TENTACLES:POI:Museums') ? '(BANNED)' : ''}</option>
+                          <option value="Libraries" disabled={room.vetoedTypes.includes('TENTACLES:POI:Libraries')}>Libraries (1mi) {room.vetoedTypes.includes('TENTACLES:POI:Libraries') ? '(BANNED)' : ''}</option>
+                          <option value="Movie Theatres" disabled={room.vetoedTypes.includes('TENTACLES:POI:Movie Theatres')}>Movie Theatres (1mi) {room.vetoedTypes.includes('TENTACLES:POI:Movie Theatres') ? '(BANNED)' : ''}</option>
+                          <option value="Hospitals" disabled={room.vetoedTypes.includes('TENTACLES:POI:Hospitals')}>Hospitals (1mi) {room.vetoedTypes.includes('TENTACLES:POI:Hospitals') ? '(BANNED)' : ''}</option>
                           {room.gameSize === 'L' && (
                             <>
-                              <option value="Metro Lines">Metro Lines (15mi)</option>
-                              <option value="Zoos">Zoos (15mi)</option>
-                              <option value="Aquariums">Aquariums (15mi)</option>
-                              <option value="Amusement Parks">Amusement Parks (15mi)</option>
+                              <option value="Metro Lines" disabled={room.vetoedTypes.includes('TENTACLES:POI:Metro Lines')}>Metro Lines (15mi) {room.vetoedTypes.includes('TENTACLES:POI:Metro Lines') ? '(BANNED)' : ''}</option>
+                              <option value="Zoos" disabled={room.vetoedTypes.includes('TENTACLES:POI:Zoos')}>Zoos (15mi) {room.vetoedTypes.includes('TENTACLES:POI:Zoos') ? '(BANNED)' : ''}</option>
+                              <option value="Aquariums" disabled={room.vetoedTypes.includes('TENTACLES:POI:Aquariums')}>Aquariums (15mi) {room.vetoedTypes.includes('TENTACLES:POI:Aquariums') ? '(BANNED)' : ''}</option>
+                              <option value="Amusement Parks" disabled={room.vetoedTypes.includes('TENTACLES:POI:Amusement Parks')}>Amusement Parks (15mi) {room.vetoedTypes.includes('TENTACLES:POI:Amusement Parks') ? '(BANNED)' : ''}</option>
                             </>
                           )}
                         </select>
@@ -875,11 +1013,14 @@ export default function SeekerView({
                         }}
                         className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-200"
                       >
-                        {(PHOTO_SUBJECTS[room.gameSize] || PHOTO_SUBJECTS.M).map((subj) => (
-                          <option key={subj} value={subj}>
-                            {subj}
-                          </option>
-                        ))}
+                        {(PHOTO_SUBJECTS[room.gameSize] || PHOTO_SUBJECTS.M).map((subj) => {
+                          const isVetoed = room.vetoedTypes.includes(`PHOTO:SUBJ:${subj}`);
+                          return (
+                            <option key={subj} value={subj} disabled={isVetoed}>
+                              {subj} {isVetoed ? '(BANNED)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-normal">

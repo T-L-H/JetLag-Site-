@@ -444,21 +444,21 @@ export default function HiderView({
   // Phase 1: Hiding countdown and Station Dropping
   if (room.gamePhase === 'HIDING') {
     return (
-      <div className="space-y-6 max-w-xl mx-auto py-2">
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden text-center">
+      <div className="space-y-4 md:space-y-6 max-w-xl mx-auto py-1 md:py-2">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-xl md:shadow-2xl relative overflow-hidden text-center">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-pink-500 to-rose-500" />
-          <h2 className="text-xl font-black text-rose-400 font-sans tracking-tight mb-1 flex items-center justify-center space-x-2">
-            <Flame className="w-5 h-5 animate-pulse" />
+          <h2 className="text-lg md:text-xl font-black text-rose-400 font-sans tracking-tight mb-1 flex items-center justify-center space-x-2">
+            <Flame className="w-4 h-4 md:w-5 md:h-5 animate-pulse" />
             <span>YOU ARE THE CHOSEN HIDER</span>
           </h2>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          <p className="text-[11px] md:text-xs text-slate-400 max-w-sm mx-auto">
             You must escape! Travel to your chosen station, drop your boundary, and find a stealthy hiding spot.
           </p>
 
           {/* Hiding Countdown Clock */}
-          <div className="my-6 bg-slate-950/80 border border-slate-850 p-4 rounded-2xl max-w-xs mx-auto">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">Hiding Period Clock</span>
-            <div className="text-4xl font-black tracking-widest text-rose-400 font-sans mt-1">
+          <div className="my-4 md:my-6 bg-slate-950/80 border border-slate-850 p-3 md:p-4 rounded-xl md:rounded-2xl max-w-xs mx-auto">
+            <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-widest text-slate-500">Hiding Period Clock</span>
+            <div className="text-3xl md:text-4xl font-black tracking-widest text-rose-400 font-sans mt-0.5 md:mt-1">
               {room.hidingEndTime ? timeRemaining : getInitialTimeString(room.hidingTimeLimit || 10)}
             </div>
             {!room.hidingEndTime && (
@@ -467,7 +467,7 @@ export default function HiderView({
                   onStartHidingTimer();
                   audio.playClick();
                 }}
-                className="mt-3 bg-rose-500 hover:bg-rose-400 text-slate-950 text-xs font-black px-4 py-2 rounded-xl transition-all shadow"
+                className="mt-2.5 bg-rose-500 hover:bg-rose-400 text-slate-950 text-[11px] md:text-xs font-black px-3 py-1.5 rounded-lg md:rounded-xl transition-all shadow"
               >
                 Start Hiding Timer
               </button>
@@ -475,29 +475,29 @@ export default function HiderView({
           </div>
 
           {/* Transit Drop Section */}
-          <div className="space-y-3 bg-slate-950/40 border border-slate-850 p-5 rounded-2xl">
+          <div className="space-y-2.5 md:space-y-3 bg-slate-950/40 border border-slate-850 p-4 md:p-5 rounded-xl md:rounded-2xl">
             <div className="flex items-center justify-between text-left">
               <div>
-                <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Step 1: Board & Drop Pin</h4>
-                <p className="text-[10px] text-slate-400 mt-0.5">Arrive at transit station, click map to mark anchor pin</p>
+                <h4 className="text-[11px] md:text-xs font-bold text-slate-200 uppercase tracking-wider">Step 1: Board & Drop Pin</h4>
+                <p className="text-[9px] md:text-[10px] text-slate-400 mt-0.5">Arrive at transit station, click map to mark anchor pin</p>
               </div>
-              <MapPin className="w-5 h-5 text-rose-500" />
+              <MapPin className="w-4 h-4 md:w-5 md:h-5 text-rose-500" />
             </div>
 
             {transitPin ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl flex items-center justify-between text-left">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 p-2.5 md:p-3 rounded-xl flex items-center justify-between text-left">
                 <div>
-                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1">
-                    <CheckCircle className="w-3.5 h-3.5" />
+                  <span className="text-[9px] md:text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1">
+                    <CheckCircle className="w-3 h-3 md:w-3.5 md:h-3.5" />
                     <span>Station Coordinate Registered</span>
                   </span>
-                  <span className="text-[10px] text-slate-300 font-mono mt-1 block">
+                  <span className="text-[9px] md:text-[10px] text-slate-300 font-mono mt-0.5 block">
                     Lat: {transitPin.lat.toFixed(5)} • Lng: {transitPin.lng.toFixed(5)}
                   </span>
                 </div>
                 <button
                   onClick={enableTransitSelection}
-                  className="text-[10px] text-slate-400 hover:text-white border border-slate-800 px-2.5 py-1 rounded-lg"
+                  className="text-[9px] md:text-[10px] text-slate-400 hover:text-white border border-slate-800 px-2 py-0.5 rounded-md"
                 >
                   Change
                 </button>
@@ -563,7 +563,7 @@ export default function HiderView({
       {/* High-priority Seeker Curse dismissal request (Modal Overlay) */}
       {hasPendingCurses && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-[#180a0a] border-2 border-red-500 rounded-3xl p-6 shadow-2xl max-w-md w-full space-y-4 text-center animate-pulse-slow">
+          <div className="bg-[#180a0a] border-2 border-red-500 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-md w-[calc(100%-1rem)] md:w-full space-y-3.5 md:space-y-4 text-center animate-pulse-slow">
             <div className="flex items-center justify-center space-x-3 text-red-400">
               <AlertTriangle className="w-8 h-8 animate-bounce shrink-0" />
               <div className="text-left">
@@ -1142,7 +1142,7 @@ export default function HiderView({
 
         return (
           <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-[2000]">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4 text-center">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-sm w-[calc(100%-1rem)] md:w-full space-y-3.5 md:space-y-4 text-center">
               <div className="p-3 bg-rose-500/10 rounded-2xl text-rose-400 w-fit mx-auto">
                 <AlertTriangle className="w-8 h-8 animate-bounce" />
               </div>
@@ -1281,7 +1281,7 @@ export default function HiderView({
       {/* MODAL 2: POWERUP EXECUTE SUBPANEL */}
       {activePowerupCard && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-[2000]">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4 text-center">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-sm w-[calc(100%-1rem)] md:w-full space-y-3.5 md:space-y-4 text-center">
             <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto">
               <Sparkles className="w-8 h-8 animate-spin" />
             </div>
@@ -1409,7 +1409,7 @@ export default function HiderView({
       {/* 🎁 CARD DRAFT REWARD MODAL */}
       {room.pendingDraft && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-[2500]">
-          <div className="bg-[#0e1322] border border-cyan-500/40 rounded-3xl p-6 shadow-2xl max-w-lg w-full space-y-6 text-center">
+          <div className="bg-[#0e1322] border border-cyan-500/40 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-lg w-[calc(100%-1rem)] md:w-full space-y-4 md:space-y-6 text-center">
             <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto border border-cyan-500/20">
               <Sparkles className="w-8 h-8 animate-pulse" />
             </div>

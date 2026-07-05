@@ -5,7 +5,7 @@ import HiderView from './components/HiderView';
 import SeekerView from './components/SeekerView';
 import MapComponent from './components/MapComponent';
 import LeaderboardView from './components/LeaderboardView';
-import { Globe, Shield, RefreshCw, Compass, MapPin, Sliders, Volume2, VolumeX, Eye, Info } from 'lucide-react';
+import { Globe, Shield, RefreshCw, Compass, MapPin, Sliders, Volume2, VolumeX, Eye, EyeOff, Info } from 'lucide-react';
 import audio from './lib/audio';
 import { safeStorage } from './lib/storage';
 
@@ -14,7 +14,8 @@ export default function App() {
   const [userName, setUserName] = useState<string>(() => safeStorage.getItem('jt_username') || '');
   const [roomCode, setRoomCode] = useState<string>(() => safeStorage.getItem('jt_room_code') || '');
   const [isGM, setIsGM] = useState<boolean>(() => safeStorage.getItem('jt_is_gm') === 'true');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(() => !audio.getMuted());
+  const [showMobileControls, setShowMobileControls] = useState(true);
 
   // Active game states
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -24,11 +25,6 @@ export default function App() {
   const [selectionMode, setSelectionMode] = useState<'CUSTOM_PIN' | 'TRANSIT_PIN' | null>(null);
   const [customPin, setCustomPin] = useState<{ lat: number; lng: number } | null>(null);
   const [transitPin, setTransitPin] = useState<{ lat: number; lng: number } | null>(null);
-
-  // Simulated Coordinates (for testing inside AI Studio iframe!)
-  const [simLat, setSimLat] = useState('40.7128');
-  const [simLng, setSimLng] = useState('-74.0060');
-  const [simActive, setSimActive] = useState(false);
 
   // Client-side visual timer (counts up/down)
   const [secondsElapsed, setSecondsElapsed] = useState(0);
@@ -75,12 +71,6 @@ export default function App() {
       try {
         const state: RoomState = JSON.parse(event.data);
         setRoom(state);
-        
-        // Feed mock coordinates default center if first load
-        if (state && !simActive && state.centerLat) {
-          setSimLat(state.centerLat.toString());
-          setSimLng(state.centerLng.toString());
-        }
       } catch (e) {
         console.error('Error parsing SSE room state:', e);
       }
@@ -108,28 +98,20 @@ export default function App() {
       }).catch((e) => console.warn('Failed reporting coordinates:', e));
     };
 
-    // If manual coordination simulation is active, report the manual values instead
-    if (simActive) {
-      const lat = parseFloat(simLat) || room?.centerLat || 40.7128;
-      const lng = parseFloat(simLng) || room?.centerLng || -74.0060;
-      reportLocation(lat, lng);
-      return;
-    }
-
-    // Otherwise use native browser Geolocation
+    // Use native browser Geolocation
     if (navigator.geolocation) {
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           reportLocation(pos.coords.latitude, pos.coords.longitude);
         },
         (err) => {
-          console.warn('Geolocation warning, falling back to simulation:', err);
+          console.warn('Geolocation warning:', err);
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
       return () => navigator.geolocation.clearWatch(watchId);
     }
-  }, [roomCode, userName, simActive, simLat, simLng, room?.centerLat, room?.centerLng]);
+  }, [roomCode, userName]);
 
   // --- ACTIVE CLOCK CONTROLLER ---
   useEffect(() => {
@@ -418,14 +400,14 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#0a0d16] text-slate-100 font-sans">
       {/* Header bar */}
-      <header className="flex justify-between items-center h-16 px-6 bg-[#0e1322] border-b border-slate-900 shadow-md shrink-0 select-none">
+      <header className="flex justify-between items-center h-16 px-4 md:px-6 bg-[#0e1322] border-b border-slate-900 shadow-md shrink-0 select-none">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-500">
+          <div className="hidden sm:block p-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-500">
             <Globe className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-sm font-black tracking-tight text-slate-100">JET TRACKER</h1>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+            <h1 className="hidden sm:block text-sm font-black tracking-tight text-slate-100">JET TRACKER</h1>
+            <p className="text-sm sm:text-[10px] text-slate-200 sm:text-slate-400 font-black sm:font-semibold uppercase tracking-wider">
               {room ? `LOBBY: ${room.code}` : 'GPS Proximity Field'}
             </p>
           </div>
@@ -433,11 +415,11 @@ export default function App() {
 
         {/* Live sync indicators and score stops */}
         {room && room.gamePhase !== 'LOBBY' && (
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3 md:space-x-4">
             {/* Stopwatch counting up/down */}
-            <div className="bg-slate-950/80 border border-slate-900 px-3 py-1.5 rounded-xl text-center">
-              <span className="text-[8px] font-bold uppercase tracking-wider text-slate-500 block">Round Score Clock</span>
-              <span className="text-sm font-black font-mono text-cyan-400 tracking-widest">
+            <div className="bg-slate-950/80 border border-slate-900 px-2.5 md:px-3 py-1 md:py-1.5 rounded-xl text-center">
+              <span className="text-[7px] md:text-[8px] font-bold uppercase tracking-wider text-slate-500 block">Round Score Clock</span>
+              <span className="text-xs md:text-sm font-black font-mono text-cyan-400 tracking-widest">
                 {room.gamePhase === 'SEEKING' ? getFormattedTime(secondsElapsed) : '00:00'}
               </span>
             </div>
@@ -453,21 +435,23 @@ export default function App() {
 
         <div className="flex items-center space-x-2">
           {roomCode && (
-            <span className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold ${sseConnected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${sseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400 animate-ping'}`} />
+            <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[8px] md:text-[9px] font-bold ${sseConnected ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+              <span className={`w-1 md:w-1.5 h-1 md:h-1.5 rounded-full ${sseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400 animate-ping'}`} />
               <span>{sseConnected ? 'Sync Live' : 'Offline'}</span>
             </span>
           )}
 
           <button
             onClick={() => {
+              const nextMuted = soundEnabled; // if currently soundEnabled, toggle means we mute
+              audio.setMuted(nextMuted);
               setSoundEnabled(!soundEnabled);
-              if (!soundEnabled) audio.playClick();
+              if (!nextMuted) audio.playClick();
             }}
             className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:text-white transition-colors text-slate-400"
             title="Toggle Synthesized Audio Feedback"
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4" />}
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4 text-cyan-400" />}
           </button>
         </div>
       </header>
@@ -502,8 +486,43 @@ export default function App() {
         ) : (
           /* Main active map tracker splits */
           <>
+            {/* Backdrop overlay on mobile when match controls are active */}
+            {showMobileControls && (
+              <div 
+                className="md:hidden fixed inset-0 bg-slate-950/65 backdrop-blur-sm z-[1999]"
+                onClick={() => {
+                  setShowMobileControls(false);
+                  audio.playClick();
+                }}
+              />
+            )}
+
             {/* Floating Left Menu Bento */}
-            <div className="w-full md:w-[360px] lg:w-[420px] bg-[#0e1322]/40 backdrop-blur-md border-r border-slate-900 flex flex-col shrink-0 overflow-y-auto p-4 space-y-4 z-10">
+            <div className={`
+              ${showMobileControls ? 'flex' : 'hidden md:flex'}
+              w-[calc(100%-2rem)] sm:w-[480px] md:w-[360px] lg:w-[420px] 
+              absolute md:relative top-1/2 md:top-auto -translate-y-1/2 md:translate-y-0 left-4 right-4 md:left-auto md:right-auto md:h-full
+              max-h-[85vh] md:max-h-none
+              bg-[#0a0f1d]/95 md:bg-[#0e1322]/40 backdrop-blur-md 
+              border md:border-none border-slate-800 md:border-r md:border-slate-900 
+              rounded-2xl md:rounded-none
+              flex flex-col shrink-0 overflow-y-auto p-3.5 md:p-4 space-y-3.5 md:space-y-4 z-[2000] shadow-2xl md:shadow-none
+            `}>
+              {/* Mobile control header */}
+              <div className="flex md:hidden items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+                <span className="text-xs font-bold text-cyan-400 tracking-wider uppercase">Match Controls</span>
+                <button
+                  onClick={() => {
+                    setShowMobileControls(false);
+                    audio.playClick();
+                  }}
+                  className="px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-black text-slate-400 hover:text-white flex items-center space-x-1"
+                >
+                  <EyeOff className="w-3 h-3" />
+                  <span>Hide Controls</span>
+                </button>
+              </div>
+
               {room.gamePhase === 'INTERMISSION' || room.gamePhase === 'END' ? (
                 <LeaderboardView
                   room={room}
@@ -571,7 +590,7 @@ export default function App() {
             </div>
 
             {/* Dominated Map Canvas on Right */}
-            <div className="flex-1 h-full relative">
+            <div className="flex-1 h-full w-full absolute md:relative inset-0 md:inset-auto z-0 md:z-auto">
               <MapComponent
                 room={room}
                 userName={userName}
@@ -587,77 +606,23 @@ export default function App() {
                 previewTentacleDistance={tentacleDistance}
               />
 
-              {/* Developer Coordinates Simulator (for AI Studio iframe play testing!) */}
-              <div className="absolute bottom-4 right-4 bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-2xl p-4 shadow-2xl z-[1000] w-64 max-w-sm text-left">
-                <div className="flex items-center justify-between mb-2 pb-1 border-b border-slate-900">
-                  <div className="flex items-center space-x-1.5">
-                    <Sliders className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                    <span className="text-[10px] font-bold text-slate-200 uppercase tracking-wider">Dev Coordinate GPS Mock</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={simActive}
-                    onChange={(e) => {
-                      setSimActive(e.target.checked);
+              {/* Floating "Show Controls" toggle on Mobile when hidden */}
+              {!showMobileControls && (
+                <div className="md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[3000]">
+                  <button
+                    onClick={() => {
+                      setShowMobileControls(true);
                       audio.playClick();
                     }}
-                    className="w-3.5 h-3.5 accent-cyan-400 cursor-pointer"
-                  />
+                    className="flex items-center space-x-1.5 bg-cyan-600 hover:bg-cyan-500 border border-cyan-400 text-white font-bold text-xs px-5 py-2.5 rounded-full shadow-2xl animate-bounce"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Show Controls</span>
+                  </button>
                 </div>
+              )}
 
-                {simActive ? (
-                  <div className="space-y-2.5 text-[10px]">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="text-slate-500 block">Mock Latitude</span>
-                        <input
-                          type="text"
-                          value={simLat}
-                          onChange={(e) => setSimLat(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1 text-[10px] font-mono mt-0.5 text-slate-200 focus:outline-none focus:border-cyan-500"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block">Mock Longitude</span>
-                        <input
-                          type="text"
-                          value={simLng}
-                          onChange={(e) => setSimLng(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1 text-[10px] font-mono mt-0.5 text-slate-200 focus:outline-none focus:border-cyan-500"
-                        />
-                      </div>
-                    </div>
-                    {/* Small coordinate walking controls */}
-                    <div className="grid grid-cols-4 gap-1 pt-1.5 border-t border-slate-900">
-                      {[
-                        { dir: 'North', dLat: 0.0008, dLng: 0 },
-                        { dir: 'South', dLat: -0.0008, dLng: 0 },
-                        { dir: 'East', dLat: 0, dLng: 0.0008 },
-                        { dir: 'West', dLat: 0, dLng: -0.0008 },
-                      ].map((btn) => (
-                        <button
-                          key={btn.dir}
-                          onClick={() => {
-                            setSimLat((prev) => (parseFloat(prev) + btn.dLat).toFixed(6));
-                            setSimLng((prev) => (parseFloat(prev) + btn.dLng).toFixed(6));
-                            audio.playClick();
-                          }}
-                          className="py-1 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-md font-bold text-[9px]"
-                        >
-                          {btn.dir}
-                        </button>
-                      ))}
-                    </div>
-                    <span className="block text-[8px] text-slate-500 text-center italic mt-1">
-                      Check box active: Reports custom coordinates above as your physical field GPS feed.
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-slate-400 leading-normal">
-                    Turn on check box to mock walking and report customized coordinates to the tracking map!
-                  </p>
-                )}
-              </div>
+
             </div>
           </>
         )}

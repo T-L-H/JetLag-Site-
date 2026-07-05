@@ -1,10 +1,14 @@
 // Synthesized Audio Engine using Web Audio API to play real sci-fi feedback
 // without loading heavy and fragile external audio files.
 
+import { safeStorage } from './storage';
+
 class AudioEngine {
   private ctx: AudioContext | null = null;
+  private isMuted: boolean = safeStorage.getItem('jt_sound_enabled') === 'false';
 
   private initCtx() {
+    if (this.isMuted) return;
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
@@ -13,7 +17,17 @@ class AudioEngine {
     }
   }
 
+  setMuted(muted: boolean) {
+    this.isMuted = muted;
+    safeStorage.setItem('jt_sound_enabled', muted ? 'false' : 'true');
+  }
+
+  getMuted(): boolean {
+    return this.isMuted;
+  }
+
   playClick() {
+    if (this.isMuted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -39,6 +53,7 @@ class AudioEngine {
   }
 
   playSuccess() {
+    if (this.isMuted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -67,6 +82,7 @@ class AudioEngine {
   }
 
   playCurse() {
+    if (this.isMuted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -110,6 +126,7 @@ class AudioEngine {
   }
 
   playSonar() {
+    if (this.isMuted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -136,6 +153,7 @@ class AudioEngine {
   }
 
   playMapCut() {
+    if (this.isMuted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -162,6 +180,7 @@ class AudioEngine {
   }
 
   playCurseDismissed() {
+    if (this.isMuted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
@@ -170,6 +189,7 @@ class AudioEngine {
       const notes = [587.33, 783.99, 987.77, 1174.66]; // D5, G5, B5, D6
       
       notes.forEach((freq, idx) => {
+        if (this.isMuted) return;
         if (!this.ctx) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();

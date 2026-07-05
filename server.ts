@@ -41,12 +41,32 @@ function generateRoomCode(): string {
   return rooms[code] ? generateRoomCode() : code;
 }
 
+function getAvailableDeck(room: RoomState): Omit<Card, 'id'>[] {
+  const drawnIds = room.drawnCurseIds || [];
+  return BASE_DECK.filter((card) => {
+    if (card.type === 'CURSE' && card.curseId) {
+      return !drawnIds.includes(card.curseId);
+    }
+    return true;
+  });
+}
+
 // Draw cards from deck
-function drawCardsFromDeck(count: number, currentHand: Card[]): Card[] {
+function drawCardsFromDeck(room: RoomState, count: number, currentHand: Card[]): Card[] {
   const drawn: Card[] = [];
+  if (!room.drawnCurseIds) {
+    room.drawnCurseIds = [];
+  }
   for (let i = 0; i < count; i++) {
-    const randomIndex = Math.floor(Math.random() * BASE_DECK.length);
-    const cardTemplate = BASE_DECK[randomIndex];
+    const available = getAvailableDeck(room);
+    const randomIndex = Math.floor(Math.random() * available.length);
+    const cardTemplate = available[randomIndex];
+
+    // Record drawn curse
+    if (cardTemplate.type === 'CURSE' && cardTemplate.curseId) {
+      room.drawnCurseIds.push(cardTemplate.curseId);
+    }
+
     const card: Card = {
       ...cardTemplate,
       id: `card_${Date.now()}_${Math.floor(Math.random() * 10000)}_${i}`,
@@ -224,6 +244,7 @@ app.post('/api/rooms', async (req, res) => {
     hidingTimeLimit: hidingTimeLimit || 10,
     history: [],
     pois,
+    drawnCurseIds: [],
   };
 
   rooms[code] = room;
@@ -363,6 +384,7 @@ app.post('/api/rooms/:code/start-game', (req, res) => {
   room.hidingStationPin = null;
   room.pendingDraft = null;
   room.hidingEndTime = null;
+  room.drawnCurseIds = [];
 
   // Initialize hider's first hand: empty by default
   room.hiderHand = [];
@@ -455,6 +477,59 @@ app.post('/api/rooms/:code/propose-question', (req, res) => {
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
+  }
+
+  // Server-side validation
+  let isVetoed = false;
+  let reason = '';
+  if (question.type === 'MATCHING') {
+    if (room.vetoedTypes.includes(`MATCHING:${question.poiType}`)) {
+      isVetoed = true;
+      reason = `MATCHING with POI "${question.poiType}" has been vetoed.`;
+    }
+  } else if (question.type === 'MEASURING') {
+    // Check if the pin is vetoed
+    const lat = question.customPin?.lat || 0;
+    const lng = question.customPin?.lng || 0;
+    const threshold = 0.0009; // Approx 100 meters
+    for (const v of room.vetoedTypes) {
+      if (v.startsWith('MEASURING:PIN:')) {
+        const parts = v.split(':');
+        const vLat = parseFloat(parts[2]);
+        const vLng = parseFloat(parts[3]);
+        if (!isNaN(vLat) && !isNaN(vLng)) {
+          if (Math.abs(lat - vLat) < threshold && Math.abs(lng - vLng) < threshold) {
+            isVetoed = true;
+            reason = `MEASURING with this pin (or one very close to it) has been vetoed.`;
+            break;
+          }
+        }
+      }
+    }
+  } else if (question.type === 'THERMOMETER') {
+    if (room.vetoedTypes.includes(`THERMOMETER:DIST:${question.distanceValue}`)) {
+      isVetoed = true;
+      reason = `THERMOMETER with distance ${question.distanceValue} mi has been vetoed.`;
+    }
+  } else if (question.type === 'RADAR') {
+    if (room.vetoedTypes.includes(`RADAR:DIST:${question.distanceValue}`)) {
+      isVetoed = true;
+      reason = `RADAR with radius ${question.distanceValue} mi has been vetoed.`;
+    }
+  } else if (question.type === 'TENTACLES') {
+    if (room.vetoedTypes.includes(`TENTACLES:POI:${question.poiType}`)) {
+      isVetoed = true;
+      reason = `TENTACLES with POI "${question.poiType}" has been vetoed.`;
+    }
+  } else if (question.type === 'PHOTO') {
+    if (room.vetoedTypes.includes(`PHOTO:SUBJ:${question.selectedSubject}`)) {
+      isVetoed = true;
+      reason = `PHOTO of "${question.selectedSubject}" has been vetoed.`;
+    }
+  }
+
+  if (isVetoed) {
+    return res.status(400).json({ error: reason });
   }
 
   // Set the active question
@@ -580,9 +655,19 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
   } else {
     if (drawCount > pickCount) {
       const draftOptions: Card[] = [];
+      if (!room.drawnCurseIds) {
+        room.drawnCurseIds = [];
+      }
       for (let i = 0; i < drawCount; i++) {
-        const randomIndex = Math.floor(Math.random() * BASE_DECK.length);
-        const cardTemplate = BASE_DECK[randomIndex];
+        const available = getAvailableDeck(room);
+        const randomIndex = Math.floor(Math.random() * available.length);
+        const cardTemplate = available[randomIndex];
+
+        // Record drawn curse
+        if (cardTemplate.type === 'CURSE' && cardTemplate.curseId) {
+          room.drawnCurseIds.push(cardTemplate.curseId);
+        }
+
         const card: Card = {
           ...cardTemplate,
           id: `card_${Date.now()}_${Math.floor(Math.random() * 10000)}_${i}`,
@@ -596,7 +681,7 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
       };
       addHistoryLog(room, `Hider triggers card draft choice: choose ${pickCount} cards out of ${drawCount} options.`);
     } else {
-      room.hiderHand = drawCardsFromDeck(pickCount, room.hiderHand);
+      room.hiderHand = drawCardsFromDeck(room, pickCount, room.hiderHand);
       addHistoryLog(room, `Hider rewarded: drew ${pickCount} cards (Hider hand size: ${room.hiderHand.length}).`);
     }
   }
@@ -668,11 +753,39 @@ app.post('/api/rooms/:code/veto-question', (req, res) => {
   room.hiderHand = room.hiderHand.filter((c) => c.id !== cardId);
 
   q.status = 'VETOED';
-  // Ban this category for the round
-  const bannedCategory = q.poiType || q.type;
-  room.vetoedTypes.push(bannedCategory);
 
-  addHistoryLog(room, `Hiders VETOED the question! "${bannedCategory}" questions are BANNED for the rest of this round.`);
+  // Encode specific fine-grained data point as banned/vetoed
+  let vetoKey = '';
+  let readableDataPoint = '';
+
+  if (q.type === 'MATCHING') {
+    vetoKey = `MATCHING:${q.poiType}`;
+    readableDataPoint = `MATCHING questions for "${q.poiType}"`;
+  } else if (q.type === 'MEASURING') {
+    const lat = q.customPin?.lat || 0;
+    const lng = q.customPin?.lng || 0;
+    vetoKey = `MEASURING:PIN:${lat.toFixed(6)}:${lng.toFixed(6)}`;
+    readableDataPoint = `MEASURING with pin [${lat.toFixed(4)}, ${lng.toFixed(4)}]`;
+  } else if (q.type === 'THERMOMETER') {
+    vetoKey = `THERMOMETER:DIST:${q.distanceValue}`;
+    readableDataPoint = `THERMOMETER with distance ${q.distanceValue} mi`;
+  } else if (q.type === 'RADAR') {
+    vetoKey = `RADAR:DIST:${q.distanceValue}`;
+    readableDataPoint = `RADAR with radius ${q.distanceValue} mi`;
+  } else if (q.type === 'TENTACLES') {
+    vetoKey = `TENTACLES:POI:${q.poiType}`;
+    readableDataPoint = `TENTACLES with POI "${q.poiType}"`;
+  } else if (q.type === 'PHOTO') {
+    vetoKey = `PHOTO:SUBJ:${q.selectedSubject}`;
+    readableDataPoint = `PHOTO with subject "${q.selectedSubject}"`;
+  } else {
+    vetoKey = q.type;
+    readableDataPoint = q.type;
+  }
+
+  room.vetoedTypes.push(vetoKey);
+
+  addHistoryLog(room, `Hiders VETOED the question! Specific ${readableDataPoint} is BANNED for the rest of this round.`);
   
   // Clean up active question
   room.activeQuestion = null;
@@ -721,7 +834,7 @@ app.post('/api/rooms/:code/play-powerup', (req, res) => {
     // Remove the playing card and the target discard card
     room.hiderHand = room.hiderHand.filter((c) => c.id !== cardId && c.id !== targetCardId);
     // Draw 2
-    room.hiderHand = drawCardsFromDeck(2, room.hiderHand);
+    room.hiderHand = drawCardsFromDeck(room, 2, room.hiderHand);
     addHistoryLog(room, `Hider played "Discard 1, Draw 2", discarding "${target.title}".`);
   } 
   else if (card.title === 'Discard 2, Draw 3') {
@@ -730,18 +843,18 @@ app.post('/api/rooms/:code/play-powerup', (req, res) => {
       return res.status(400).json({ error: 'Must select exactly 2 cards to discard.' });
     }
     room.hiderHand = room.hiderHand.filter((c) => c.id !== cardId && !targetCardIds.includes(c.id));
-    room.hiderHand = drawCardsFromDeck(3, room.hiderHand);
+    room.hiderHand = drawCardsFromDeck(room, 3, room.hiderHand);
     addHistoryLog(room, `Hider played "Discard 2, Draw 3" to reshuffle hand.`);
   } 
   else if (card.title === 'Draw 1, Expand 1') {
     // Hand expand is visual/local validation during play, just draw card on server
     room.hiderHand = room.hiderHand.filter((c) => c.id !== cardId);
-    room.hiderHand = drawCardsFromDeck(1, room.hiderHand);
+    room.hiderHand = drawCardsFromDeck(room, 1, room.hiderHand);
     addHistoryLog(room, `Hider played "Draw 1, Expand 1" to permanently expand max hand limit.`);
   } 
   else if (card.title === 'Randomize') {
     room.hiderHand = room.hiderHand.filter((c) => c.id !== cardId);
-    room.hiderHand = drawCardsFromDeck(1, room.hiderHand);
+    room.hiderHand = drawCardsFromDeck(room, 1, room.hiderHand);
     addHistoryLog(room, `Hider played "Randomize" to cycles 1 card.`);
   }
   else if (card.title === 'Move / Escape') {
@@ -987,6 +1100,7 @@ app.post('/api/rooms/:code/next-round', (req, res) => {
     room.vetoedTypes = [];
     room.hidingStationPin = null;
     room.hidingEndTime = null;
+    room.drawnCurseIds = [];
 
     // Reset grid to active only if within the circle boundaries (avoids square glitch!)
     room.grid = room.grid.map((c) => {
@@ -1024,6 +1138,7 @@ app.post('/api/rooms/:code/reset', (req, res) => {
   room.freeQuestionsRemaining = 0;
   room.hidingEndTime = null;
   room.vetoedTypes = [];
+  room.drawnCurseIds = [];
   room.grid = generateGrid(room.centerLat, room.centerLng, room.radiusMiles);
   room.history = [];
 
