@@ -200,8 +200,13 @@ app.post('/api/rooms', async (req, res) => {
   // Fetch real Google Places POIs or fall back to high-fidelity simulation
   let pois: POI[] = [];
   const mapsKey = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
-  if (mapsKey && mapsKey !== 'YOUR_API_KEY' && (!customPolygon || customPolygon.length < 3)) {
-    pois = await fetchGooglePlacesNearby(centerLat, centerLng, radiusMiles, mapsKey);
+  if (mapsKey && mapsKey !== 'YOUR_API_KEY') {
+    const rawPois = await fetchGooglePlacesNearby(centerLat, centerLng, radiusMiles, mapsKey);
+    if (customPolygon && customPolygon.length >= 3) {
+      pois = rawPois.filter(p => isPointInPolygon({ lat: p.lat, lng: p.lng }, customPolygon));
+    } else {
+      pois = rawPois;
+    }
   }
 
   if (pois.length < 10) {
