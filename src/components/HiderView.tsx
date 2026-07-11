@@ -13,7 +13,7 @@ interface HiderViewProps {
   onAnswerQuestion: (answerValue: boolean | string, photoUrl?: string) => void;
   onVetoQuestion: (cardId: string) => void;
   onPlayPowerup: (cardId: string, targetCardId?: string, targetCardIds?: string[]) => void;
-  onCastCurse: (cardId: string, fulfilledCost: boolean, discardCardIds?: string[]) => void;
+  onCastCurse: (cardId: string, fulfilledCost: boolean, discardCardIds?: string[], drainedBrainVetoes?: string[]) => void;
   onConfirmCurseDismissal: (curseId: string, confirmed: boolean) => void;
   onCatchHider: () => void;
   enableTransitSelection: () => void;
@@ -283,6 +283,66 @@ function evaluateActiveQuestion(room: RoomState): EvaluationResult | null {
   return null;
 }
 
+const DRAINED_BRAIN_CATEGORIES = [
+  { id: 'RADAR', name: 'RADAR (Circle Radius)' },
+  { id: 'THERMOMETER', name: 'THERMOMETER (Distance)' },
+  { id: 'TENTACLES', name: 'TENTACLES (POI Type)' },
+  { id: 'MATCHING', name: 'MATCHING (POI Type)' },
+  { id: 'PHOTO', name: 'PHOTO (Subject)' },
+];
+
+const DRAINED_BRAIN_VALUES: Record<string, { id: string; name: string }[]> = {
+  RADAR: [
+    { id: '0.25', name: '0.25 miles (400m)' },
+    { id: '0.5', name: '0.50 miles (800m)' },
+    { id: '1', name: '1.00 mile (1.6km)' },
+    { id: '3', name: '3.00 miles (4.8km)' },
+    { id: '5', name: '5.00 miles (8km)' },
+    { id: '10', name: '10.00 miles (16km)' },
+    { id: '25', name: '25.00 miles (40km)' },
+    { id: '50', name: '50.00 miles (80km)' },
+  ],
+  THERMOMETER: [
+    { id: '0.5', name: '0.5 miles (800m)' },
+    { id: '3', name: '3.0 miles (4.8km)' },
+    { id: '10', name: '10.0 miles (16km)' },
+    { id: '50', name: '50.0 miles (80km)' },
+  ],
+  TENTACLES: [
+    { id: 'Museums', name: 'Museums (1mi)' },
+    { id: 'Libraries', name: 'Libraries (1mi)' },
+    { id: 'Movie Theatres', name: 'Movie Theatres (1mi)' },
+    { id: 'Hospitals', name: 'Hospitals (1mi)' },
+    { id: 'Metro Lines', name: 'Metro Lines (15mi)' },
+    { id: 'Zoos', name: 'Zoos (15mi)' },
+    { id: 'Aquariums', name: 'Aquariums (15mi)' },
+    { id: 'Amusement Parks', name: 'Amusement Parks (15mi)' },
+  ],
+  MATCHING: [
+    { id: 'Commercial Airport', name: 'Commercial Airport' },
+    { id: 'Transit Line', name: 'Transit Line' },
+    { id: 'Station Name Length', name: 'Station Name Length' },
+    { id: 'Street or Path', name: 'Street or Path' },
+    { id: 'Park', name: 'Park' },
+    { id: 'Amusement Park', name: 'Amusement Park' },
+    { id: 'Zoo', name: 'Zoo' },
+    { id: 'Aquarium', name: 'Aquarium' },
+    { id: 'Golf Course', name: 'Golf Course' },
+    { id: 'Museum', name: 'Museum' },
+    { id: 'Movie Theatre', name: 'Movie Theatre' },
+    { id: 'Hospital', name: 'Hospital' },
+    { id: 'Library', name: 'Library' },
+  ],
+  PHOTO: [
+    { id: 'A Tree (entire tree)', name: 'A Tree (entire tree)' },
+    { id: 'The Sky (shoot directly up)', name: 'The Sky (shoot directly up)' },
+    { id: 'You (Selfie mode, arm extended)', name: 'You (Selfie mode, arm extended)' },
+    { id: 'Widest Street (both sides)', name: 'Widest Street (both sides)' },
+    { id: 'Tallest structure in sightline', name: 'Tallest structure in sightline' },
+    { id: 'Any building visible from station', name: 'Any building visible from station' },
+  ],
+};
+
 export default function HiderView({
   room,
   userName,
@@ -310,6 +370,41 @@ export default function HiderView({
   // Curse casting validation modal
   const [activeCurseToCast, setActiveCurseToCast] = useState<Card | null>(null);
   const [curseDiscardIds, setCurseDiscardIds] = useState<string[]>([]);
+  const [drainedBrainVetoes, setDrainedBrainVetoes] = useState<{
+    category: string;
+    value: string;
+  }[]>([
+    { category: 'RADAR', value: '0.5' },
+    { category: 'TENTACLES', value: 'Museums' },
+    { category: 'MATCHING', value: 'Park' },
+  ]);
+
+  useEffect(() => {
+    if (activeCurseToCast?.curseId === 'curse_22' || activeCurseToCast?.title === 'Curse Of The Drained Brain') {
+      setDrainedBrainVetoes([
+        { category: 'RADAR', value: '0.5' },
+        { category: 'TENTACLES', value: 'Museums' },
+        { category: 'MATCHING', value: 'Park' },
+      ]);
+    }
+  }, [activeCurseToCast]);
+
+  const handleDrainedBrainCategoryChange = (index: number, newCategory: string) => {
+    const defaultVal = DRAINED_BRAIN_VALUES[newCategory]?.[0]?.id || '';
+    setDrainedBrainVetoes((prev) => {
+      const updated = [...prev];
+      updated[index] = { category: newCategory, value: defaultVal };
+      return updated;
+    });
+  };
+
+  const handleDrainedBrainValueChange = (index: number, newValue: string) => {
+    setDrainedBrainVetoes((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], value: newValue };
+      return updated;
+    });
+  };
 
   // Photo Question Upload State
   const [photoBase64, setPhotoBase64] = useState<string>('');
@@ -403,7 +498,20 @@ export default function HiderView({
 
   const handleCastConfirm = (fulfilled: boolean) => {
     if (!activeCurseToCast) return;
-    onCastCurse(activeCurseToCast.id, fulfilled, fulfilled ? curseDiscardIds : undefined);
+    
+    let vetoKeys: string[] | undefined = undefined;
+    if (activeCurseToCast.curseId === 'curse_22' || activeCurseToCast.title === 'Curse Of The Drained Brain') {
+      vetoKeys = drainedBrainVetoes.map(v => {
+        if (v.category === 'RADAR') return `RADAR:DIST:${v.value}`;
+        if (v.category === 'THERMOMETER') return `THERMOMETER:DIST:${v.value}`;
+        if (v.category === 'TENTACLES') return `TENTACLES:POI:${v.value}`;
+        if (v.category === 'MATCHING') return `MATCHING:${v.value}`;
+        if (v.category === 'PHOTO') return `PHOTO:SUBJ:${v.value}`;
+        return '';
+      }).filter(Boolean);
+    }
+
+    onCastCurse(activeCurseToCast.id, fulfilled, fulfilled ? curseDiscardIds : undefined, vetoKeys);
     setActiveCurseToCast(null);
     setCurseDiscardIds([]);
   };
@@ -1214,6 +1322,60 @@ export default function HiderView({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* DRAINED BRAIN DROPDOWNS */}
+              {(activeCurseToCast.curseId === 'curse_22' || activeCurseToCast.title === 'Curse Of The Drained Brain') && (
+                <div className="space-y-3 text-left">
+                  <div className="p-2.5 bg-rose-500/5 border border-rose-500/20 rounded-xl">
+                    <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block mb-1">
+                      🚫 BANNED DATA CONFIGURATION
+                    </span>
+                    <p className="text-[10px] text-slate-400 leading-normal">
+                      Specify the 3 specific questions or data parameters you want to eliminate completely.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {[0, 1, 2].map((idx) => {
+                      const current = drainedBrainVetoes[idx] || { category: 'RADAR', value: '0.5' };
+                      const valueOptions = DRAINED_BRAIN_VALUES[current.category] || [];
+                      return (
+                        <div key={idx} className="bg-slate-950/60 border border-slate-850 p-2.5 rounded-xl space-y-1.5">
+                          <label className="block text-[9px] font-black uppercase tracking-wider text-slate-400">
+                            Banned Question #{idx + 1}
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <span className="text-[8px] text-slate-500 uppercase block mb-0.5">Category</span>
+                              <select
+                                value={current.category}
+                                onChange={(e) => handleDrainedBrainCategoryChange(idx, e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-850 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-rose-500/50"
+                              >
+                                {DRAINED_BRAIN_CATEGORIES.map((cat) => (
+                                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <span className="text-[8px] text-slate-500 uppercase block mb-0.5">Parameter / Value</span>
+                              <select
+                                value={current.value}
+                                onChange={(e) => handleDrainedBrainValueChange(idx, e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-850 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-rose-500/50"
+                              >
+                                {valueOptions.map((val) => (
+                                  <option key={val.id} value={val.id}>{val.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 

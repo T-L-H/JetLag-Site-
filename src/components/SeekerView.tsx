@@ -420,6 +420,54 @@ export default function SeekerView({
 
   // --- RENDERS ---
 
+  // Lockout 0: Full-screen high-priority alert when a Seeker question is VETOED
+  if (room.activeQuestion && room.activeQuestion.status === 'VETOED') {
+    return (
+      <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-[2500] pointer-events-auto">
+        <div className="bg-[#180a0a] border-2 border-rose-500 rounded-3xl p-6 shadow-2xl max-w-md w-full text-center space-y-5 relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="p-4 bg-rose-500 text-slate-950 rounded-full w-fit mx-auto shadow-lg shadow-rose-950/50">
+            <ShieldAlert className="w-12 h-12 animate-pulse" />
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-rose-400">🚨 QUESTION BLOCKED</span>
+            <h2 className="text-2xl font-black text-rose-500 uppercase tracking-tight">VETOED BY HIDERS!</h2>
+            <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto font-sans">
+              The Hiders have cast their **Veto Powerup** card to completely block your proposed question!
+            </p>
+          </div>
+
+          <div className="bg-slate-950/80 border border-rose-950 p-4 rounded-2xl text-left space-y-2">
+            <div>
+              <span className="text-[9px] font-bold text-rose-400 uppercase tracking-wider block font-sans">Blocked Question:</span>
+              <p className="text-xs text-slate-200 font-bold leading-relaxed mt-0.5 font-sans">
+                "{room.activeQuestion.title}"
+              </p>
+            </div>
+            <div className="border-t border-rose-950/40 pt-2">
+              <span className="text-[9px] font-bold text-rose-400 uppercase tracking-wider block font-sans">Penalty Outcome:</span>
+              <p className="text-xs text-slate-300 leading-relaxed mt-0.5 font-sans">
+                Proximity or parameter questions of this specific type are now <span className="text-rose-400 font-bold">vetoed</span> and banned for the remainder of this round.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              onClearQuestion();
+              audio.playClick();
+            }}
+            className="w-full py-3 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-slate-950 text-xs font-black rounded-xl transition-all shadow-lg cursor-pointer uppercase tracking-wider active:scale-95 font-sans"
+          >
+            Acknowledge & Choose New Question
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Lockout 1: Active Curses red warning cover
   if (room.activeCurses.length > 0 && !isMobileFloating) {
     const currentCurse = room.activeCurses[0];

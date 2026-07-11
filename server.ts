@@ -3,7 +3,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { RoomState, Team, Player, Card, ActiveQuestion, ActiveCurse, GridCell, POI } from './src/types';
-import { getDistance, generateGrid, cutMatching, cutMeasuring, cutThermometer, cutRadar, cutTentacles, generateDynamicPOIs } from './src/lib/geo';
+import { getDistance, generateGrid, cutMatching, cutMeasuring, cutThermometer, cutRadar, cutTentacles, generateDynamicPOIs, isPointInPolygon } from './src/lib/geo';
 import { BASE_DECK, getBonusMinutesForSize, getCurseDiscardRequirement } from './src/lib/cardsData';
 
 const app = express();
@@ -192,20 +192,20 @@ app.get('/api/health', (req, res) => {
 
 // Create Room
 app.post('/api/rooms', async (req, res) => {
-  const { centerLat, centerLng, radiusMiles, gameSize, teams, hidingTimeLimit } = req.body;
+  const { centerLat, centerLng, radiusMiles, customPolygon, gameSize, teams, hidingTimeLimit } = req.body;
   
   const code = generateRoomCode();
-  const grid = generateGrid(centerLat, centerLng, radiusMiles);
+  const grid = generateGrid(centerLat, centerLng, radiusMiles, customPolygon);
 
   // Fetch real Google Places POIs or fall back to high-fidelity simulation
   let pois: POI[] = [];
   const mapsKey = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
-  if (mapsKey && mapsKey !== 'YOUR_API_KEY') {
+  if (mapsKey && mapsKey !== 'YOUR_API_KEY' && (!customPolygon || customPolygon.length < 3)) {
     pois = await fetchGooglePlacesNearby(centerLat, centerLng, radiusMiles, mapsKey);
   }
 
   if (pois.length < 10) {
-    pois = generateDynamicPOIs(centerLat, centerLng, radiusMiles);
+    pois = generateDynamicPOIs(centerLat, centerLng, radiusMiles, customPolygon);
   }
 
   // Pre-initialize teams if passed
@@ -227,6 +227,7 @@ app.post('/api/rooms', async (req, res) => {
     centerLat,
     centerLng,
     radiusMiles,
+    customPolygon,
     gameSize,
     gamePhase: 'LOBBY',
     hiderTeamIndex: 0,
@@ -249,7 +250,10 @@ app.post('/api/rooms', async (req, res) => {
   };
 
   rooms[code] = room;
-  addHistoryLog(room, `Room created with size: ${gameSize} (${radiusMiles} mi radius), hiding time: ${hidingTimeLimit || 10} min, and teams: ${teams?.join(', ') || 'none'}.`);
+  const sizeDesc = customPolygon && customPolygon.length >= 3 
+    ? `custom boundary with ${customPolygon.length} points` 
+    : `${radiusMiles} mi radius`;
+  addHistoryLog(room, `Room created with size: ${gameSize} (${sizeDesc}), hiding time: ${hidingTimeLimit || 10} min, and teams: ${teams?.join(', ') || 'none'}.`);
 
   res.json(room);
 });
@@ -642,13 +646,27 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
   if (room.freeQuestionsRemaining && room.freeQuestionsRemaining > 0) {
     room.freeQuestionsRemaining -= 1;
     addHistoryLog(room, `The seekers' question was free! Hider receives no reward card drafts for this question.`);
+    
+    // Decrement overflowing chalice as well since a question was asked
+    if (room.overflowingChaliceQuestionsRemaining && room.overflowingChaliceQuestionsRemaining > 0) {
+      room.overflowingChaliceQuestionsRemaining -= 1;
+    }
   } else {
-    if (drawCount > pickCount) {
+    let actualDrawCount = drawCount;
+    let actualPickCount = pickCount;
+
+    if (room.overflowingChaliceQuestionsRemaining && room.overflowingChaliceQuestionsRemaining > 0) {
+      actualDrawCount += 1;
+      room.overflowingChaliceQuestionsRemaining -= 1;
+      addHistoryLog(room, `Curse Of The Overflowing Chalice active: Hider gets to draw an extra card option for this question (${room.overflowingChaliceQuestionsRemaining} questions remaining).`);
+    }
+
+    if (actualDrawCount > actualPickCount) {
       const draftOptions: Card[] = [];
       if (!room.drawnCurseIds) {
         room.drawnCurseIds = [];
       }
-      for (let i = 0; i < drawCount; i++) {
+      for (let i = 0; i < actualDrawCount; i++) {
         const available = getAvailableDeck(room);
         const randomIndex = Math.floor(Math.random() * available.length);
         const cardTemplate = available[randomIndex];
@@ -667,12 +685,12 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
       room.pendingDraft = {
         id: `draft_${Date.now()}`,
         options: draftOptions,
-        pickCount: pickCount,
+        pickCount: actualPickCount,
       };
-      addHistoryLog(room, `Hider triggers card draft choice: choose ${pickCount} cards out of ${drawCount} options.`);
+      addHistoryLog(room, `Hider triggers card draft choice: choose ${actualPickCount} cards out of ${actualDrawCount} options.`);
     } else {
-      room.hiderHand = drawCardsFromDeck(room, pickCount, room.hiderHand);
-      addHistoryLog(room, `Hider rewarded: drew ${pickCount} cards (Hider hand size: ${room.hiderHand.length}).`);
+      room.hiderHand = drawCardsFromDeck(room, actualPickCount, room.hiderHand);
+      addHistoryLog(room, `Hider rewarded: drew ${actualPickCount} cards (Hider hand size: ${room.hiderHand.length}).`);
     }
   }
 
@@ -951,6 +969,26 @@ app.post('/api/rooms/:code/cast-curse', (req, res) => {
     addHistoryLog(room, `Modifier active: The Seekers' next question will be completely free (Hider receives no card rewards).`);
   }
 
+  if (card.curseId === 'curse_5' || card.title === 'Curse Of The Overflowing Chalice') {
+    room.overflowingChaliceQuestionsRemaining = (room.overflowingChaliceQuestionsRemaining || 0) + 3;
+    addHistoryLog(room, `Modifier active: Hider gets an extra card to choose from for the next 3 questions.`);
+  }
+
+  if (card.curseId === 'curse_22' || card.title === 'Curse Of The Drained Brain') {
+    const { drainedBrainVetoes } = req.body;
+    if (drainedBrainVetoes && Array.isArray(drainedBrainVetoes)) {
+      if (!room.vetoedTypes) {
+        room.vetoedTypes = [];
+      }
+      drainedBrainVetoes.forEach((v: string) => {
+        if (typeof v === 'string' && !room.vetoedTypes.includes(v)) {
+          room.vetoedTypes.push(v);
+        }
+      });
+      addHistoryLog(room, `Drained Brain: Hider banned 3 specific question parameters: [${drainedBrainVetoes.join(', ')}].`);
+    }
+  }
+
   broadcastRoom(code);
   res.json(room);
 });
@@ -1115,10 +1153,16 @@ app.post('/api/rooms/:code/next-round', (req, res) => {
     room.drawnCurseIds = [];
     room.lastHidingScoreDetails = null;
 
-    // Reset grid to active only if within the circle boundaries (avoids square glitch!)
+    // Reset grid to active only if within the circle or polygon boundaries (avoids square glitch!)
     room.grid = room.grid.map((c) => {
-      const d = getDistance(room.centerLat, room.centerLng, c.lat, c.lng);
-      return { ...c, active: d <= room.radiusMiles };
+      let active = false;
+      if (room.customPolygon && room.customPolygon.length >= 3) {
+        active = isPointInPolygon({ lat: c.lat, lng: c.lng }, room.customPolygon);
+      } else {
+        const d = getDistance(room.centerLat, room.centerLng, c.lat, c.lng);
+        active = d <= room.radiusMiles;
+      }
+      return { ...c, active };
     });
 
     // Reset hider hand for next team to empty (matches first round starting hand size of 0)
@@ -1153,7 +1197,7 @@ app.post('/api/rooms/:code/reset', (req, res) => {
   room.vetoedTypes = [];
   room.drawnCurseIds = [];
   room.lastHidingScoreDetails = null;
-  room.grid = generateGrid(room.centerLat, room.centerLng, room.radiusMiles);
+  room.grid = generateGrid(room.centerLat, room.centerLng, room.radiusMiles, room.customPolygon);
   room.history = [];
 
   addHistoryLog(room, `Room reset successfully.`);

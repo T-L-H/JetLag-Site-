@@ -154,6 +154,7 @@ export default function App() {
     centerLat: number;
     centerLng: number;
     radiusMiles: number;
+    customPolygon?: { lat: number; lng: number }[];
     gameSize: string;
     teams: string[];
     gmName: string;
@@ -168,6 +169,7 @@ export default function App() {
           centerLat: params.centerLat,
           centerLng: params.centerLng,
           radiusMiles: params.radiusMiles,
+          customPolygon: params.customPolygon,
           gameSize: params.gameSize,
           teams: params.teams,
           hidingTimeLimit: params.hidingTimeLimit,
@@ -329,12 +331,12 @@ export default function App() {
     });
   };
 
-  const handleCastCurse = async (cardId: string, fulfilledCost: boolean, discardCardIds?: string[]) => {
+  const handleCastCurse = async (cardId: string, fulfilledCost: boolean, discardCardIds?: string[], drainedBrainVetoes?: string[]) => {
     if (!roomCode) return;
     await fetch(`/api/rooms/${roomCode}/cast-curse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cardId, fulfilledCost, discardCardIds }),
+      body: JSON.stringify({ cardId, fulfilledCost, discardCardIds, drainedBrainVetoes }),
     });
   };
 

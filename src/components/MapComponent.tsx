@@ -215,15 +215,25 @@ export default function MapComponent({
     const seekerLat = seekerTeam?.lat || room.centerLat;
     const seekerLng = seekerTeam?.lng || room.centerLng;
 
-    // 1. Draw outer Game Area circular boundary
-    L.circle([room.centerLat, room.centerLng], {
-      radius: room.radiusMiles * 1609.34, // convert miles to meters
-      color: '#38bdf8', // Neon Sky Blue
-      weight: 2,
-      fillColor: '#0c4a6e',
-      fillOpacity: 0.05,
-      dashArray: '5, 10',
-    }).addTo(layers);
+    // 1. Draw outer Game Area boundary (polygon if exists, otherwise circle)
+    if (room.customPolygon && room.customPolygon.length >= 3) {
+      L.polygon(room.customPolygon.map(p => [p.lat, p.lng]), {
+        color: '#f43f5e', // Neon Rose
+        weight: 3,
+        fillColor: '#f43f5e',
+        fillOpacity: 0.05,
+        dashArray: '3, 6',
+      }).addTo(layers);
+    } else {
+      L.circle([room.centerLat, room.centerLng], {
+        radius: room.radiusMiles * 1609.34, // convert miles to meters
+        color: '#38bdf8', // Neon Sky Blue
+        weight: 2,
+        fillColor: '#0c4a6e',
+        fillOpacity: 0.05,
+        dashArray: '5, 10',
+      }).addTo(layers);
+    }
 
     // 2. Draw Active Grid Cells (Active = Neon Cyan, Inactive = completely empty/sliced)
     // To make it super fast, we only draw active cells

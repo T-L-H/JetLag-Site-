@@ -285,16 +285,6 @@ export const BASE_DECK: Omit<Card, 'id'>[] = [
     curseId: 'curse_19',
   },
   {
-    title: 'Curse Of Spotty Memory',
-    type: 'CURSE' as const,
-    rarity: 'COMMON' as const,
-    desc: 'Disable a random question category. Seekers roll a die to determine which category is blocked after each question asked.',
-    costDesc: 'Discard 1 TIME card from your hand.',
-    seekerEffect: 'YOU HAVE BEEN CURSED! For the rest of the run, one random category of questions is disabled at all times. Roll a die to determine which category is locked. After asking your next question, roll again to block a new category.',
-    dismissalDesc: 'Active persistent restriction (Acknowledge and roll).',
-    curseId: 'curse_20',
-  },
-  {
     title: 'Curse Of The Lemon Phylactery',
     type: 'CURSE' as const,
     rarity: 'COMMON' as const,
@@ -410,9 +400,6 @@ export function getCurseDiscardRequirement(card: Card): { count: number; filterT
   const curseId = card.curseId;
   if (curseId === 'curse_22') {
     return { count: -1, desc: 'Discard your entire remaining hand of other cards!' };
-  }
-  if (curseId === 'curse_20') {
-    return { count: 1, filterType: 'TIME', desc: 'Discard 1 TIME card from your hand.' };
   }
   if (curseId === 'curse_21') {
     return { count: 1, filterType: 'POWERUP', desc: 'Discard 1 POWERUP card from your hand.' };

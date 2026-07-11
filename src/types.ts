@@ -109,6 +109,7 @@ export interface RoomState {
   centerLat: number;
   centerLng: number;
   radiusMiles: number;
+  customPolygon?: { lat: number; lng: number }[];
   gameSize: GameSize;
   gamePhase: GamePhase;
   hiderTeamIndex: number; // Index of the team currently hiding
@@ -121,6 +122,7 @@ export interface RoomState {
   hiderHand: Card[];
   activeCurses: ActiveCurse[];
   freeQuestionsRemaining?: number;
+  overflowingChaliceQuestionsRemaining?: number;
   timerStart: number | null; // epoch time in milliseconds
   timerAccumulated: number; // accumulated seconds so far
   vetoedTypes: string[]; // categories of questions currently banned (e.g., matching POI types or question types)

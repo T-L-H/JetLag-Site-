@@ -12,6 +12,7 @@ interface LobbyViewProps {
     centerLat: number;
     centerLng: number;
     radiusMiles: number;
+    customPolygon?: { lat: number; lng: number }[];
     gameSize: GameSize;
     teams: string[];
     gmName: string;
@@ -58,6 +59,19 @@ export default function LobbyView({
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
+
+  // Custom shape (polygon) drawing states and refs
+  const [mapMode, setMapMode] = useState<'CIRCLE' | 'POLYGON'>('CIRCLE');
+  const [polygonPoints, setPolygonPoints] = useState<{ lat: number; lng: number }[]>([]);
+
+  const mapModeRef = useRef<'CIRCLE' | 'POLYGON'>('CIRCLE');
+  mapModeRef.current = mapMode;
+
+  const polygonPointsRef = useRef<{ lat: number; lng: number }[]>([]);
+  polygonPointsRef.current = polygonPoints;
+
+  const polygonRef = useRef<any>(null);
+  const polygonMarkersRef = useRef<any[]>([]);
 
   // Setup Map Refs
   const setupMapContainerRef = useRef<HTMLDivElement>(null);
@@ -177,9 +191,15 @@ export default function LobbyView({
     map.on('click', (e: any) => {
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
-      setCustomLat(lat.toFixed(6));
-      setCustomLng(lng.toFixed(6));
-      audio.playClick();
+      if (mapModeRef.current === 'POLYGON') {
+        const newPoints = [...polygonPointsRef.current, { lat, lng }];
+        setPolygonPoints(newPoints);
+        audio.playClick();
+      } else {
+        setCustomLat(lat.toFixed(6));
+        setCustomLng(lng.toFixed(6));
+        audio.playClick();
+      }
     });
 
     // Center marker drag
@@ -232,6 +252,8 @@ export default function LobbyView({
         circleRef.current = null;
         centerMarkerRef.current = null;
         radiusMarkerRef.current = null;
+        polygonRef.current = null;
+        polygonMarkersRef.current = [];
       }
     };
   }, [room]);
@@ -275,6 +297,102 @@ export default function LobbyView({
       }
     }
   }, [customLat, customLng, customRadius]);
+
+  // Synchronize custom polygon drawing on the map
+  useEffect(() => {
+    const map = setupMapRef.current;
+    if (!map) return;
+
+    // Show/hide circle and radius elements based on mapMode
+    if (mapMode === 'CIRCLE') {
+      if (circleRef.current && !map.hasLayer(circleRef.current)) {
+        circleRef.current.addTo(map);
+      }
+      if (centerMarkerRef.current && !map.hasLayer(centerMarkerRef.current)) {
+        centerMarkerRef.current.addTo(map);
+      }
+      if (radiusMarkerRef.current && !map.hasLayer(radiusMarkerRef.current)) {
+        radiusMarkerRef.current.addTo(map);
+      }
+    } else {
+      if (circleRef.current && map.hasLayer(circleRef.current)) {
+        map.removeLayer(circleRef.current);
+      }
+      if (centerMarkerRef.current && map.hasLayer(centerMarkerRef.current)) {
+        map.removeLayer(centerMarkerRef.current);
+      }
+      if (radiusMarkerRef.current && map.hasLayer(radiusMarkerRef.current)) {
+        map.removeLayer(radiusMarkerRef.current);
+      }
+    }
+
+    // Draw polygon
+    if (!polygonRef.current) {
+      polygonRef.current = L.polygon([], {
+        color: '#f43f5e', // beautiful rose-500 color for custom polygon
+        weight: 3,
+        fillColor: '#f43f5e',
+        fillOpacity: 0.15,
+      }).addTo(map);
+    }
+
+    if (mapMode === 'POLYGON') {
+      polygonRef.current.setLatLngs(polygonPoints.map(p => [p.lat, p.lng]));
+      if (!map.hasLayer(polygonRef.current)) {
+        polygonRef.current.addTo(map);
+      }
+    } else {
+      if (map.hasLayer(polygonRef.current)) {
+        map.removeLayer(polygonRef.current);
+      }
+    }
+
+    // Draw/recreate vertex markers
+    // Clear old vertex markers
+    if (polygonMarkersRef.current) {
+      polygonMarkersRef.current.forEach((m) => map.removeLayer(m));
+      polygonMarkersRef.current = [];
+    }
+
+    if (mapMode === 'POLYGON') {
+      polygonPoints.forEach((pt, index) => {
+        // Red dot for each point
+        const markerIcon = L.divIcon({
+          html: `
+            <div class="relative flex items-center justify-center">
+              <div class="w-4 h-4 bg-rose-500 border border-white rounded-full shadow-md flex items-center justify-center">
+                <span class="text-[7px] text-white font-black">${index + 1}</span>
+              </div>
+            </div>
+          `,
+          className: 'custom-div-icon-vertex',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+
+        const m = L.marker([pt.lat, pt.lng], {
+          icon: markerIcon,
+          draggable: true,
+        }).addTo(map);
+
+        // Track drag events for editing polygon vertices in real-time
+        m.on('drag', (e: any) => {
+          const newPos = e.target.getLatLng();
+          setPolygonPoints((prev) => {
+            const updated = [...prev];
+            updated[index] = { lat: newPos.lat, lng: newPos.lng };
+            return updated;
+          });
+        });
+
+        m.on('dragend', () => {
+          audio.playClick();
+        });
+
+        polygonMarkersRef.current.push(m);
+      });
+    }
+  }, [mapMode, polygonPoints]);
 
   const handleCopyCode = () => {
     if (!room) return;
@@ -339,9 +457,36 @@ export default function LobbyView({
   };
 
   const handleCreate = () => {
-    const lat = parseFloat(customLat) || 40.7128;
-    const lng = parseFloat(customLng) || -74.0060;
-    const radius = parseFloat(customRadius) || 5;
+    let lat = parseFloat(customLat) || 40.7128;
+    let lng = parseFloat(customLng) || -74.0060;
+    let radius = parseFloat(customRadius) || 5;
+    let customPolygonPoints: { lat: number; lng: number }[] | undefined = undefined;
+
+    if (mapMode === 'POLYGON') {
+      if (polygonPoints.length < 3) {
+        alert("Please draw a custom map with at least 3 points, or switch back to Circle Map mode.");
+        return;
+      }
+      customPolygonPoints = polygonPoints;
+      
+      // Calculate centroid of the custom polygon
+      let sumLat = 0;
+      let sumLng = 0;
+      for (const p of polygonPoints) {
+        sumLat += p.lat;
+        sumLng += p.lng;
+      }
+      lat = sumLat / polygonPoints.length;
+      lng = sumLng / polygonPoints.length;
+
+      // Calculate maximum distance from centroid to any vertex as radius
+      let maxDist = 0.5; // fallback
+      for (const p of polygonPoints) {
+        const d = getDistance(lat, lng, p.lat, p.lng);
+        if (d > maxDist) maxDist = d;
+      }
+      radius = maxDist;
+    }
 
     if (availableTeams.length < 2) {
       alert("At least 2 teams are required to create a lobby.");
@@ -354,6 +499,7 @@ export default function LobbyView({
       centerLat: lat,
       centerLng: lng,
       radiusMiles: radius,
+      customPolygon: customPolygonPoints,
       gameSize: size,
       teams: availableTeams,
       gmName: gmName.trim() || 'Game Master',
@@ -794,13 +940,86 @@ export default function LobbyView({
         <div className="lg:col-span-5 flex flex-col gap-6">
           {/* Draggable setup map card */}
           <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-3xl p-4 shadow-2xl flex-1 flex flex-col min-h-[400px]">
-            <div className="flex items-center justify-between mb-3 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 shrink-0">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Game Zone Setup Map</h3>
-                <p className="text-[10px] text-slate-500">Drag center pin to relocate, outer green pin to resize</p>
+                <p className="text-[10px] text-slate-500">
+                  {mapMode === 'CIRCLE' 
+                    ? "Drag center pin to relocate, outer green pin to resize" 
+                    : "Click on the map to define custom boundary corners"}
+                </p>
               </div>
-              <Compass className="w-4 h-4 text-cyan-400 animate-spin-slow" />
+              
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-850 self-start sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMapMode('CIRCLE');
+                    audio.playClick();
+                  }}
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                    mapMode === 'CIRCLE'
+                      ? 'bg-cyan-500 text-slate-950 shadow-md'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Circle Map
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMapMode('POLYGON');
+                    audio.playClick();
+                  }}
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                    mapMode === 'POLYGON'
+                      ? 'bg-rose-500 text-white shadow-md'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Custom Shape
+                </button>
+              </div>
             </div>
+
+            {mapMode === 'POLYGON' && (
+              <div className="mb-3 p-3 bg-rose-950/20 border border-rose-900/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in shrink-0">
+                <div className="text-[10px] text-rose-300/90 leading-relaxed flex-1">
+                  <span className="font-semibold block text-rose-200 mb-0.5">Photoshop Select-Tool Mode Active</span>
+                  Click on the map to add points. Drag any point to move it. Connect at least 3 points.
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-1 rounded-lg border border-rose-500/20">
+                    {polygonPoints.length} Point{polygonPoints.length !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (polygonPoints.length > 0) {
+                        setPolygonPoints(polygonPoints.slice(0, -1));
+                        audio.playClick();
+                      }
+                    }}
+                    disabled={polygonPoints.length === 0}
+                    className="p-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
+                    title="Undo last point"
+                  >
+                    <span className="text-[10px] font-bold px-1">Undo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPolygonPoints([]);
+                      audio.playClick();
+                    }}
+                    disabled={polygonPoints.length === 0}
+                    className="p-1.5 bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-rose-400 hover:text-rose-300 transition-all cursor-pointer text-[10px] font-bold"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+            )}
             
             {/* The actual Map mount container */}
             <div className="flex-1 relative rounded-2xl overflow-hidden border border-slate-950 shadow-inner min-h-[300px]">

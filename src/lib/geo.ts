@@ -15,10 +15,58 @@ export function getDistance(lat1: number, lon1: number, lat2: number, lon2: numb
   return R * c;
 }
 
-// Generate an N x N grid inside a bounding box, clipping to a circular radius
-export function generateGrid(centerLat: number, centerLng: number, radiusMiles: number): GridCell[] {
+export function isPointInPolygon(point: { lat: number; lng: number }, polygon: { lat: number; lng: number }[]): boolean {
+  if (polygon.length < 3) return false;
+  const x = point.lng;
+  const y = point.lat;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng, yi = polygon[i].lat;
+    const xj = polygon[j].lng, yj = polygon[j].lat;
+    const intersect = ((yi > y) !== (yj > y))
+        && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Generate an N x N grid inside a bounding box, clipping to a circular radius or a custom polygon
+export function generateGrid(
+  centerLat: number,
+  centerLng: number,
+  radiusMiles: number,
+  customPolygon?: { lat: number; lng: number }[]
+): GridCell[] {
   const grid: GridCell[] = [];
   const N = 32; // 32x32 = 1024 cells, perfect balance of fidelity & rendering speed
+
+  if (customPolygon && customPolygon.length >= 3) {
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+    for (const p of customPolygon) {
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+    }
+
+    for (let i = 0; i < N; i++) {
+      const lat = minLat + (i / (N - 1)) * (maxLat - minLat);
+      for (let j = 0; j < N; j++) {
+        const lng = minLng + (j / (N - 1)) * (maxLng - minLng);
+        const inside = isPointInPolygon({ lat, lng }, customPolygon);
+        grid.push({
+          id: `cell_${i}_${j}`,
+          lat,
+          lng,
+          active: inside,
+        });
+      }
+    }
+    return grid;
+  }
 
   // Approximate degree conversion
   const milesPerDegreeLat = 69.0;
@@ -272,8 +320,13 @@ export function cutTentacles(
   };
 }
 
-// Generate random points (POIs) inside a radius around a center coordinate to simulate the city landmarks dynamically.
-export function generateDynamicPOIs(centerLat: number, centerLng: number, radiusMiles: number): POI[] {
+// Generate random points (POIs) inside a radius or polygon around a center coordinate to simulate the city landmarks dynamically.
+export function generateDynamicPOIs(
+  centerLat: number,
+  centerLng: number,
+  radiusMiles: number,
+  customPolygon?: { lat: number; lng: number }[]
+): POI[] {
   const pois: POI[] = [];
   const poiTypes = [
     'Commercial Airport', 'Transit Line', 'Street or Path', '1st Admin (State)', 
@@ -303,6 +356,19 @@ export function generateDynamicPOIs(centerLat: number, centerLng: number, radius
 
   const defaultNames = ['Central Landmark', 'Scenic Point', 'Historical Plaque', 'Community Plaza', 'Public Pavilion'];
 
+  // Calculate polygon bounding box if applicable
+  let usePolygon = false;
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  if (customPolygon && customPolygon.length >= 3) {
+    usePolygon = true;
+    for (const p of customPolygon) {
+      if (p.lat < minLat) minLat = p.lat;
+      if (p.lat > maxLat) maxLat = p.lat;
+      if (p.lng < minLng) minLng = p.lng;
+      if (p.lng > maxLng) maxLng = p.lng;
+    }
+  }
+
   // Seed about 4-6 POIs per category to ensure beautiful Voronoi cuts
   let idCount = 1;
   for (const type of poiTypes) {
@@ -310,17 +376,41 @@ export function generateDynamicPOIs(centerLat: number, centerLng: number, radius
     const names = namesByType[type] || defaultNames;
 
     for (let i = 0; i < qty; i++) {
-      // Generate coordinates around center within radiusMiles
-      const u = Math.random();
-      const v = Math.random();
-      const r = (radiusMiles * Math.sqrt(u)) / 69.0; // latitude degree scale
-      const theta = v * 2 * Math.PI;
+      let lat = centerLat;
+      let lng = centerLng;
 
-      const dLat = r * Math.sin(theta);
-      const dLng = (r * Math.cos(theta)) / Math.cos((centerLat * Math.PI) / 180);
+      if (usePolygon && customPolygon) {
+        // Generate inside bounding box and filter by polygon
+        let found = false;
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const randLat = minLat + Math.random() * (maxLat - minLat);
+          const randLng = minLng + Math.random() * (maxLng - minLng);
+          if (isPointInPolygon({ lat: randLat, lng: randLng }, customPolygon)) {
+            lat = randLat;
+            lng = randLng;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          // Fallback: pick a random vertex from the polygon
+          const vertex = customPolygon[Math.floor(Math.random() * customPolygon.length)];
+          lat = vertex.lat + (Math.random() - 0.5) * 0.005;
+          lng = vertex.lng + (Math.random() - 0.5) * 0.005;
+        }
+      } else {
+        // Generate coordinates around center within radiusMiles
+        const u = Math.random();
+        const v = Math.random();
+        const r = (radiusMiles * Math.sqrt(u)) / 69.0; // latitude degree scale
+        const theta = v * 2 * Math.PI;
 
-      const lat = centerLat + dLat;
-      const lng = centerLng + dLng;
+        const dLat = r * Math.sin(theta);
+        const dLng = (r * Math.cos(theta)) / Math.cos((centerLat * Math.PI) / 180);
+
+        lat = centerLat + dLat;
+        lng = centerLng + dLng;
+      }
 
       const suffix = names[i % names.length];
       const name = qty > 1 ? `${type} - ${suffix}` : `${type} ${suffix}`;
