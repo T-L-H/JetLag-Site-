@@ -421,8 +421,8 @@ export default function HiderView({
   const [catchPressed, setCatchPressed] = useState(false);
   const [catchProgress, setCatchProgress] = useState(0);
 
-  // Discard down to 6 validation
-  const maxHandSize = 6;
+  // Discard down to maxHandSize validation
+  const maxHandSize = room.maxHandSize || 6;
   const isHandOverlimit = room.hiderHand.length > maxHandSize;
 
   // Countdown clock formatting helper
@@ -731,9 +731,9 @@ export default function HiderView({
       {isHandOverlimit && (
         <div className="bg-rose-500/15 border border-rose-500/30 p-4 rounded-2xl text-center flex flex-col items-center space-y-2 animate-pulse">
           <AlertTriangle className="w-6 h-6 text-rose-400" />
-          <h3 className="text-xs font-black text-rose-300 uppercase tracking-wider">Hand Size Over Limit ({room.hiderHand.length}/6)</h3>
+          <h3 className="text-xs font-black text-rose-300 uppercase tracking-wider">Hand Size Over Limit ({room.hiderHand.length}/{maxHandSize})</h3>
           <p className="text-[10px] text-slate-400 max-w-xs">
-            You are holding too many cards! You must discard down to 6 cards before performing other actions.
+            You are holding too many cards! You must discard down to {maxHandSize} cards before performing other actions.
           </p>
           <div className="flex space-x-2 mt-1">
             <button
@@ -789,7 +789,7 @@ export default function HiderView({
           <div className="flex items-center justify-between px-1">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Hiders Hand Management</span>
             <span className={`text-[10px] font-bold ${isHandOverlimit ? 'text-rose-400' : 'text-slate-400'}`}>
-              Hand Size: {room.hiderHand.length}/6
+              Hand Size: {room.hiderHand.length}/{maxHandSize}
             </span>
           </div>
 

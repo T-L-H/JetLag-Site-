@@ -252,6 +252,7 @@ app.post('/api/rooms', async (req, res) => {
     pois,
     drawnCurseIds: [],
     lastHidingScoreDetails: null,
+    maxHandSize: 6,
   };
 
   rooms[code] = room;
@@ -339,6 +340,29 @@ app.post('/api/rooms/:code/update-location', (req, res) => {
       team.lng = lng;
       team.lastActive = Date.now();
     }
+
+    // Update active thermometer path if this player is the tracking seeker
+    if (room.activeThermometer && room.activeThermometer.seekerName === playerName) {
+      const path = room.activeThermometer.path || [];
+      if (path.length > 0) {
+        const lastPt = path[path.length - 1];
+        const distFromLast = getDistance(lastPt.lat, lastPt.lng, lat, lng);
+        // Minimum movement threshold to add point (0.003 miles is ~5 meters) to filter out static jitter
+        if (distFromLast >= 0.003) {
+          path.push({ lat, lng });
+          room.activeThermometer.path = path;
+          // Calculate sequential path distance
+          let totalDist = 0;
+          for (let i = 0; i < path.length - 1; i++) {
+            totalDist += getDistance(path[i].lat, path[i].lng, path[i + 1].lat, path[i + 1].lng);
+          }
+          room.activeThermometer.currentDistanceMiles = totalDist;
+        }
+      } else {
+        path.push({ lat, lng });
+        room.activeThermometer.path = path;
+      }
+    }
   }
 
   broadcastRoom(code);
@@ -378,13 +402,15 @@ app.post('/api/rooms/:code/start-game', (req, res) => {
   room.timerStart = null;
   room.timerAccumulated = 0;
   room.activeQuestion = null;
+  room.activeThermometer = null;
   room.activeCurses = [];
   room.vetoedTypes = [];
   room.hidingStationPin = null;
   room.pendingDraft = null;
   room.hidingEndTime = null;
   room.drawnCurseIds = [];
-
+  room.maxHandSize = 6;
+  
   // Initialize hider's first hand: empty by default
   room.hiderHand = [];
 
@@ -468,6 +494,48 @@ app.post('/api/rooms/:code/done-hiding', (req, res) => {
   res.json(room);
 });
 
+// Start Thermometer Tracking
+app.post('/api/rooms/:code/start-thermometer', (req, res) => {
+  const { code } = req.params;
+  const { seekerName, startLat, startLng, distanceValue } = req.body;
+  const room = rooms[code];
+
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  room.activeThermometer = {
+    seekerName,
+    startPin: { lat: startLat, lng: startLng },
+    distanceValue,
+    path: [{ lat: startLat, lng: startLng }],
+    currentDistanceMiles: 0,
+  };
+
+  addHistoryLog(room, `Seekers started Thermometer tracking at ${startLat.toFixed(5)}, ${startLng.toFixed(5)} for target distance ${distanceValue} mi.`);
+  broadcastRoom(code);
+  res.json(room);
+});
+
+// Reset Thermometer Tracking
+app.post('/api/rooms/:code/reset-thermometer', (req, res) => {
+  const { code } = req.params;
+  const room = rooms[code];
+
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  if (room.activeThermometer) {
+    const name = room.activeThermometer.seekerName;
+    room.activeThermometer = null;
+    addHistoryLog(room, `Seeker "${name}" reset the active Thermometer tracking.`);
+  }
+
+  broadcastRoom(code);
+  res.json(room);
+});
+
 // Propose Question
 app.post('/api/rooms/:code/propose-question', (req, res) => {
   const { code } = req.params;
@@ -538,6 +606,12 @@ app.post('/api/rooms/:code/propose-question', (req, res) => {
     status: 'PENDING',
   };
 
+  if (question.type === 'THERMOMETER' && room.activeThermometer) {
+    room.activeQuestion.path = room.activeThermometer.path;
+    room.activeQuestion.startPin = room.activeThermometer.startPin;
+    room.activeThermometer = null; // Clear active tracking since question is proposed!
+  }
+
   addHistoryLog(room, `Seekers proposed a ${question.type} question: "${question.title}"`);
   broadcastRoom(code);
 
@@ -573,6 +647,22 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
 
   // Track initial active grid cells
   const initialActive = room.grid.filter((c) => c.active).length;
+
+  // Find the active cell closest to the hider before the cut
+  let hiderCellId: string | null = null;
+  let minHiderDist = Infinity;
+  for (const cell of room.grid) {
+    if (cell.active) {
+      const d = getDistance(hiderLat, hiderLng, cell.lat, cell.lng);
+      if (d < minHiderDist) {
+        minHiderDist = d;
+        hiderCellId = cell.id;
+      }
+    }
+  }
+
+  // Backup grid state in case of catastrophic 0-cell elimination
+  const gridBackup = JSON.parse(JSON.stringify(room.grid));
 
   let description = '';
 
@@ -633,7 +723,25 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
     description = `Photo Question completed with photo of "${q.selectedSubject}".`;
   }
 
-  const finalActive = room.grid.filter((c) => c.active).length;
+  // Safeguard: Ensure the hider's representative active cell is never eliminated due to discretization/quantization mismatches
+  if (hiderCellId) {
+    room.grid = room.grid.map((cell) => {
+      if (cell.id === hiderCellId) {
+        return { ...cell, active: true };
+      }
+      return cell;
+    });
+  }
+
+  let finalActive = room.grid.filter((c) => c.active).length;
+
+  // Catastrophic safety net: If somehow we still ended up with 0 active cells, restore the backup grid
+  if (finalActive === 0 && initialActive > 0) {
+    room.grid = gridBackup;
+    finalActive = initialActive;
+    addHistoryLog(room, `WARNING: Cut would have eliminated all search cells! Restored previous search grid.`);
+  }
+
   const eliminated = initialActive - finalActive;
 
   q.mathResult = {
@@ -800,9 +908,6 @@ app.post('/api/rooms/:code/veto-question', (req, res) => {
 
   addHistoryLog(room, `Hiders VETOED the question! Specific ${readableDataPoint} is BANNED for the rest of this round.`);
   
-  // Clean up active question
-  room.activeQuestion = null;
-
   broadcastRoom(code);
   res.json(room);
 });
@@ -867,10 +972,10 @@ app.post('/api/rooms/:code/play-powerup', (req, res) => {
     addHistoryLog(room, `Hider played "Discard 2, Draw 3" to reshuffle hand.`);
   } 
   else if (card.title === 'Draw 1, Expand 1') {
-    // Hand expand is visual/local validation during play, just draw card on server
     room.hiderHand = room.hiderHand.filter((c) => c.id !== cardId);
+    room.maxHandSize = (room.maxHandSize || 6) + 1;
     room.hiderHand = drawCardsFromDeck(room, 1, room.hiderHand);
-    addHistoryLog(room, `Hider played "Draw 1, Expand 1" to permanently expand max hand limit.`);
+    addHistoryLog(room, `Hider played "Draw 1, Expand 1" to permanently expand max hand limit to ${room.maxHandSize}.`);
   } 
   else if (card.title === 'Randomize') {
     room.hiderHand = room.hiderHand.filter((c) => c.id !== cardId);
@@ -1151,6 +1256,7 @@ app.post('/api/rooms/:code/next-round', (req, res) => {
     room.timerAccumulated = 0;
     room.freeQuestionsRemaining = 0;
     room.activeQuestion = null;
+    room.activeThermometer = null;
     room.activeCurses = [];
     room.vetoedTypes = [];
     room.hidingStationPin = null;
@@ -1172,6 +1278,7 @@ app.post('/api/rooms/:code/next-round', (req, res) => {
 
     // Reset hider hand for next team to empty (matches first round starting hand size of 0)
     room.hiderHand = [];
+    room.maxHandSize = 6;
 
     addHistoryLog(room, `Round started! Team "${room.teams[room.hiderTeamIndex].name}" is now HIDING.`);
   }
@@ -1194,6 +1301,7 @@ app.post('/api/rooms/:code/reset', (req, res) => {
   room.players = [];
   room.hiderHand = [];
   room.activeQuestion = null;
+  room.activeThermometer = null;
   room.activeCurses = [];
   room.timerStart = null;
   room.timerAccumulated = 0;
@@ -1202,6 +1310,7 @@ app.post('/api/rooms/:code/reset', (req, res) => {
   room.vetoedTypes = [];
   room.drawnCurseIds = [];
   room.lastHidingScoreDetails = null;
+  room.maxHandSize = 6;
   room.grid = generateGrid(room.centerLat, room.centerLng, room.radiusMiles, room.customPolygon);
   room.history = [];
 

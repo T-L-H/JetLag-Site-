@@ -67,6 +67,7 @@ export interface ActiveQuestion {
   selectedSubject?: string;
   status: 'PENDING' | 'ANSWERED' | 'VETOED';
   photoUrl?: string;
+  path?: { lat: number; lng: number }[];
   mathResult?: {
     isYes?: boolean;
     eliminatedCount: number;
@@ -104,6 +105,14 @@ export interface HidingScoreDetails {
   finalScore: number; // seconds
 }
 
+export interface ActiveThermometer {
+  seekerName: string;
+  startPin: { lat: number; lng: number };
+  distanceValue: number; // miles
+  path: { lat: number; lng: number }[];
+  currentDistanceMiles: number;
+}
+
 export interface RoomState {
   code: string;
   centerLat: number;
@@ -118,6 +127,7 @@ export interface RoomState {
   players: Player[];
   grid: GridCell[];
   activeQuestion: ActiveQuestion | null;
+  activeThermometer?: ActiveThermometer | null;
   pendingDraft?: CardDraft | null;
   hiderHand: Card[];
   activeCurses: ActiveCurse[];
@@ -133,4 +143,5 @@ export interface RoomState {
   pois?: POI[];
   drawnCurseIds?: string[];
   lastHidingScoreDetails?: HidingScoreDetails | null;
+  maxHandSize?: number;
 }

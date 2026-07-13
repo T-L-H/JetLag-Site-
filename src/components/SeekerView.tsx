@@ -123,8 +123,11 @@ export default function SeekerView({
 
   // Thermometer state
   const [thermometerDistance, setThermometerDistance] = useState(0.5); // miles
-  const [thermometerActive, setThermometerActive] = useState(false);
-  const [thermometerStartPin, setThermometerStartPin] = useState<{ lat: number; lng: number } | null>(null);
+  const activeTherm = room.activeThermometer;
+  const thermometerActive = !!activeTherm;
+  const thermometerStartPin = activeTherm ? activeTherm.startPin : null;
+  const thermometerDistanceCovered = activeTherm ? activeTherm.currentDistanceMiles : 0;
+  const currentThermometerDistance = activeTherm ? activeTherm.distanceValue : thermometerDistance;
 
   // Curse Fulfill confirmation
   const [confirmingCurseId, setConfirmingCurseId] = useState<string | null>(null);
@@ -404,8 +407,6 @@ export default function SeekerView({
     onProposeQuestion(previewingQuestion);
     setPreviewingQuestion(null);
     clearCustomPin();
-    setThermometerActive(false);
-    setThermometerStartPin(null);
   };
 
   const handleStartThermometer = () => {
@@ -413,9 +414,25 @@ export default function SeekerView({
     const seekerLat = seeker?.lat || room.centerLat;
     const seekerLng = seeker?.lng || room.centerLng;
 
-    setThermometerStartPin({ lat: seekerLat, lng: seekerLng });
-    setThermometerActive(true);
     audio.playSonar();
+    fetch(`/api/rooms/${room.code}/start-thermometer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        seekerName: userName,
+        startLat: seekerLat,
+        startLng: seekerLng,
+        distanceValue: thermometerDistance,
+      }),
+    }).catch((e) => console.warn('Failed to start thermometer tracking:', e));
+  };
+
+  const handleResetThermometer = () => {
+    audio.playClick();
+    fetch(`/api/rooms/${room.code}/reset-thermometer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch((e) => console.warn('Failed to reset thermometer tracking:', e));
   };
 
   // --- RENDERS ---
@@ -969,14 +986,32 @@ export default function SeekerView({
                       🔥 Start Tracking Distance
                     </button>
                   ) : (
-                    <div className="bg-slate-950/80 border border-slate-850 p-3 rounded-xl space-y-1.5 text-center">
+                    <div className="bg-slate-950/80 border border-slate-850 p-3 rounded-xl space-y-2 text-center">
                       <span className="text-[8px] font-bold text-orange-400 uppercase tracking-widest animate-pulse block">Tracking Active</span>
-                      <p className="text-[9px] text-slate-300 leading-normal">
-                        Walk <b>{thermometerDistance} mi</b>. Path is visually drawn on map.
+                      <p className="text-[10px] text-slate-300 leading-normal">
+                        Walk <b>{currentThermometerDistance} mi</b>. Path is visually drawn on map.
                       </p>
+                      
+                      {/* Progress Bar */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[8px] text-slate-400 font-bold uppercase">
+                          <span>Progress</span>
+                          <span>{((thermometerDistanceCovered / currentThermometerDistance) * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                          <div 
+                            className="bg-orange-500 h-full rounded-full transition-all duration-500" 
+                            style={{ width: `${Math.min(100, (thermometerDistanceCovered / currentThermometerDistance) * 100)}%` }}
+                          />
+                        </div>
+                        <div className="text-[9px] text-slate-400">
+                          Walked: <span className="text-orange-400 font-semibold font-mono">{thermometerDistanceCovered.toFixed(3)}</span> / {currentThermometerDistance} mi
+                        </div>
+                      </div>
+
                       <button
-                        onClick={() => setThermometerActive(false)}
-                        className="text-[9px] text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-lg"
+                        onClick={handleResetThermometer}
+                        className="text-[9px] text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-lg hover:bg-red-500/10 transition"
                       >
                         Reset
                       </button>
@@ -1601,14 +1636,32 @@ export default function SeekerView({
                         🔥 Start Tracking Distance
                       </button>
                     ) : (
-                      <div className="bg-slate-950/80 border border-slate-850 p-4 rounded-xl space-y-2 text-center">
-                        <span className="text-[9px] font-bold text-orange-400 uppercase tracking-widest animate-pulse">Thermometer Tracking Active</span>
-                        <p className="text-[10px] text-slate-300">
-                          Walk to cover <b>{thermometerDistance} mi</b>. Path is visually drawn on map.
+                      <div className="bg-slate-950/80 border border-slate-850 p-4 rounded-xl space-y-3 text-center">
+                        <span className="text-[9px] font-bold text-orange-400 uppercase tracking-widest animate-pulse block">Thermometer Tracking Active</span>
+                        <p className="text-[11px] text-slate-300">
+                          Walk to cover <b>{currentThermometerDistance} mi</b>. Path is visually drawn on map.
                         </p>
+
+                        {/* Progress Bar */}
+                        <div className="space-y-1.5 text-left">
+                          <div className="flex justify-between text-[9px] text-slate-400 font-bold uppercase">
+                            <span>Progress</span>
+                            <span>{((thermometerDistanceCovered / currentThermometerDistance) * 100).toFixed(0)}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-orange-500 h-full rounded-full transition-all duration-500" 
+                              style={{ width: `${Math.min(100, (thermometerDistanceCovered / currentThermometerDistance) * 100)}%` }}
+                            />
+                          </div>
+                          <div className="text-[10px] text-slate-400 text-center">
+                            Walked: <span className="text-orange-400 font-semibold font-mono">{thermometerDistanceCovered.toFixed(3)}</span> / {currentThermometerDistance} mi
+                          </div>
+                        </div>
+
                         <button
-                          onClick={() => setThermometerActive(false)}
-                          className="text-[9px] text-red-400 border border-red-500/20 px-2.5 py-1 rounded-lg"
+                          onClick={handleResetThermometer}
+                          className="text-[10px] text-red-400 border border-red-500/20 px-3 py-1 rounded-lg hover:bg-red-500/10 transition"
                         >
                           Reset Thermometer
                         </button>

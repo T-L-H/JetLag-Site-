@@ -559,23 +559,59 @@ export default function MapComponent({
     if (room.activeQuestion?.type === 'THERMOMETER' && room.activeQuestion.startPin) {
       const start = room.activeQuestion.startPin;
       const end = room.activeQuestion.endPin || seekerTeam; // default to seeker location
+      const finalPath = room.activeQuestion.path || [];
 
-      if (end && end.lat && end.lng) {
+      if (start && start.lat && start.lng) {
         // Draw start pin
         L.circleMarker([start.lat, start.lng], {
-          radius: 6,
+          radius: 7,
           color: '#ffffff',
-          weight: 1.5,
+          weight: 2,
           fillColor: '#f97316', // Orange
           fillOpacity: 1.0,
-        }).addTo(layers);
+        }).bindPopup('<b>Thermometer Start Pin</b>').addTo(layers);
 
-        // Draw line tracking path
-        L.polyline([[start.lat, start.lng], [end.lat, end.lng]], {
-          color: '#f97316',
-          weight: 3,
-          dashArray: '5, 5',
-        }).addTo(layers);
+        if (finalPath && finalPath.length > 0) {
+          // Draw the actual walked path!
+          L.polyline(finalPath.map(p => [p.lat, p.lng]), {
+            color: '#f97316',
+            weight: 4,
+            opacity: 0.85,
+          }).addTo(layers);
+        } else if (end && end.lat && end.lng) {
+          // Fallback to straight line
+          L.polyline([[start.lat, start.lng], [end.lat, end.lng]], {
+            color: '#f97316',
+            weight: 3,
+            dashArray: '5, 5',
+          }).addTo(layers);
+        }
+      }
+    }
+
+    // 7b. Draw Active Live Thermometer Tracking Path if exists
+    if (room.activeThermometer) {
+      const start = room.activeThermometer.startPin;
+      const livePath = room.activeThermometer.path || [];
+
+      if (start && start.lat && start.lng) {
+        // Draw starting pin
+        L.circleMarker([start.lat, start.lng], {
+          radius: 7,
+          color: '#ffffff',
+          weight: 2,
+          fillColor: '#ef4444', // Red-Orange
+          fillOpacity: 1.0,
+        }).bindPopup('<b>Thermometer Start (Tracking)</b>').addTo(layers);
+
+        // Draw live tracking path
+        if (livePath.length > 0) {
+          L.polyline(livePath.map(p => [p.lat, p.lng]), {
+            color: '#f97316',
+            weight: 4,
+            opacity: 0.9,
+          }).addTo(layers);
+        }
       }
     }
 
