@@ -30,6 +30,11 @@ export function isPointInPolygon(point: { lat: number; lng: number }, polygon: {
   return inside;
 }
 
+export function getGridN(radiusMiles: number): number {
+  const targetCellSize = 0.5; // 0.5 miles per cell
+  return Math.max(16, Math.min(120, Math.ceil((radiusMiles * 2) / targetCellSize)));
+}
+
 // Generate an N x N grid inside a bounding box, clipping to a circular radius or a custom polygon
 export function generateGrid(
   centerLat: number,
@@ -38,7 +43,7 @@ export function generateGrid(
   customPolygon?: { lat: number; lng: number }[]
 ): GridCell[] {
   const grid: GridCell[] = [];
-  const N = 32; // 32x32 = 1024 cells, perfect balance of fidelity & rendering speed
+  const N = getGridN(radiusMiles);
 
   if (customPolygon && customPolygon.length >= 3) {
     let minLat = Infinity;

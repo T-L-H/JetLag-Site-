@@ -60,29 +60,60 @@ export default function App() {
   useEffect(() => {
     if (!roomCode) return;
 
-    setSseConnected(false);
-    const source = new EventSource(`/api/rooms/${roomCode}/stream`);
+    let source: EventSource | null = null;
+    let reconnectTimeout: any = null;
+    let isMounted = true;
 
-    source.onopen = () => {
-      setSseConnected(true);
-    };
-
-    source.onmessage = (event) => {
-      try {
-        const state: RoomState = JSON.parse(event.data);
-        setRoom(state);
-      } catch (e) {
-        console.error('Error parsing SSE room state:', e);
+    const connect = () => {
+      if (!isMounted) return;
+      
+      if (source) {
+        source.close();
       }
+
+      setSseConnected(false);
+      source = new EventSource(`/api/rooms/${roomCode}/stream`);
+
+      source.onopen = () => {
+        if (!isMounted) return;
+        setSseConnected(true);
+      };
+
+      source.onmessage = (event) => {
+        if (!isMounted) return;
+        try {
+          const state: RoomState = JSON.parse(event.data);
+          setRoom(state);
+          setSseConnected(true);
+        } catch (e) {
+          console.error('Error parsing SSE room state:', e);
+        }
+      };
+
+      source.onerror = () => {
+        if (!isMounted) return;
+        setSseConnected(false);
+        if (source) {
+          source.close();
+          source = null;
+        }
+        
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(() => {
+          console.log('Attempting SSE reconnection...');
+          connect();
+        }, 2500);
+      };
     };
 
-    source.onerror = () => {
-      setSseConnected(false);
-      source.close();
-    };
+    connect();
 
     return () => {
-      source.close();
+      isMounted = false;
+      if (source) {
+        source.close();
+      }
+      clearTimeout(reconnectTimeout);
     };
   }, [roomCode]);
 
@@ -90,7 +121,16 @@ export default function App() {
   useEffect(() => {
     if (!roomCode || !userName) return;
 
+    let lastReportedLat: number | null = null;
+    let lastReportedLng: number | null = null;
+
     const reportLocation = (lat: number, lng: number) => {
+      if (lastReportedLat === lat && lastReportedLng === lng) {
+        return;
+      }
+      lastReportedLat = lat;
+      lastReportedLng = lng;
+
       fetch(`/api/rooms/${roomCode}/update-location`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,18 +139,40 @@ export default function App() {
     };
 
     // Use native browser Geolocation
+    let watchId: number | null = null;
     if (navigator.geolocation) {
-      const watchId = navigator.geolocation.watchPosition(
+      watchId = navigator.geolocation.watchPosition(
         (pos) => {
           reportLocation(pos.coords.latitude, pos.coords.longitude);
         },
         (err) => {
-          console.warn('Geolocation warning:', err);
+          console.warn('Geolocation watch error:', err);
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
-      return () => navigator.geolocation.clearWatch(watchId);
     }
+
+    // Secondary Poller to force-wake the GPS chip and bypass HMR/Background sleep restrictions
+    const intervalId = setInterval(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            reportLocation(pos.coords.latitude, pos.coords.longitude);
+          },
+          (err) => {
+            console.warn('Geolocation poll error:', err);
+          },
+          { enableHighAccuracy: true, timeout: 4000, maximumAge: 0 }
+        );
+      }
+    }, 3000);
+
+    return () => {
+      if (watchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+      clearInterval(intervalId);
+    };
   }, [roomCode, userName]);
 
   // --- ACTIVE CLOCK CONTROLLER ---

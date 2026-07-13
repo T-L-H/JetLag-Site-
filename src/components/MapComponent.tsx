@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { RoomState, POI } from '../types';
-import { getDistance, generateDynamicPOIs } from '../lib/geo';
+import { getDistance, generateDynamicPOIs, getGridN } from '../lib/geo';
 
 declare const L: any; // Use global Leaflet from CDN
 
@@ -201,6 +201,43 @@ export default function MapComponent({
     }
   }, [customPin]);
 
+  // Zoom and auto-follow active thermometer or question pin location
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (room.activeThermometer) {
+      const activeSeeker = room.players.find((p) => p.name === room.activeThermometer?.seekerName);
+      if (activeSeeker && activeSeeker.lat && activeSeeker.lng) {
+        map.setView([activeSeeker.lat, activeSeeker.lng], 16, { animate: true });
+        return;
+      } else {
+        const start = room.activeThermometer.startPin;
+        if (start && start.lat && start.lng) {
+          map.setView([start.lat, start.lng], 16, { animate: true });
+          return;
+        }
+      }
+    }
+
+    if (room.activeQuestion?.type === 'THERMOMETER' && room.activeQuestion.startPin) {
+      const start = room.activeQuestion.startPin;
+      map.setView([start.lat, start.lng], 15, { animate: true });
+      return;
+    }
+
+    if (room.activeQuestion?.customPin) {
+      const pin = room.activeQuestion.customPin;
+      map.setView([pin.lat, pin.lng], 14, { animate: true });
+      return;
+    }
+  }, [
+    room.activeThermometer?.seekerName,
+    room.players.find((p) => p.name === room.activeThermometer?.seekerName)?.lat,
+    room.players.find((p) => p.name === room.activeThermometer?.seekerName)?.lng,
+    room.activeQuestion?.id
+  ]);
+
   // Redraw overlays whenever state, pins, or players change
   useEffect(() => {
     const map = mapRef.current;
@@ -240,7 +277,7 @@ export default function MapComponent({
     const activeCells = room.grid.filter((cell) => cell.active);
     
     // Grid coordinate resolution calculations (approximate lat/lng box size)
-    const N = 32;
+    const N = getGridN(room.radiusMiles);
     const milesPerDegreeLat = 69.0;
     const milesPerDegreeLng = 69.0 * Math.cos((room.centerLat * Math.PI) / 180);
     const cellLatSpan = (room.radiusMiles / milesPerDegreeLat) * 2 / (N - 1);
@@ -478,38 +515,78 @@ export default function MapComponent({
     const playerTeam = playerRecord ? room.teams.find((t) => t.name === playerRecord.team) : null;
     const isHiderTeam = playerTeam?.role === 'HIDER';
 
-    // 4. Draw players/teams
-    room.teams.forEach((team) => {
-      if (!team.lat || !team.lng) return;
+    // 4. Draw individual players
+    room.players.forEach((player) => {
+      if (!player.lat || !player.lng) return;
 
-      const isCurrentHider = team.role === 'HIDER';
+      const playerTeamObj = room.teams.find((t) => t.name === player.team);
+      const isHider = playerTeamObj?.role === 'HIDER';
 
-      // Hide the hider from seeker's screen completely during active game phases!
-      if (isCurrentHider && !isHiderTeam && (room.gamePhase === 'HIDING' || room.gamePhase === 'SEEKING')) {
-        // Hider is hidden from Seekers!
+      // Rules:
+      // - Only the Hiders can see the hiders' locations on the map during active game phases.
+      // - Everyone can see Seekers' locations on the map at all times!
+      if (isHider && !isHiderTeam && (room.gamePhase === 'HIDING' || room.gamePhase === 'SEEKING')) {
+        // Hide hider players from Seeker!
         return;
       }
 
-      const color = isCurrentHider ? '#f43f5e' : '#3b82f6'; // Pink/Red for Hider, Blue for Seeker
-      
-      // Beautiful custom pulse marker
-      L.circleMarker([team.lat, team.lng], {
-        radius: 8,
-        color: '#ffffff',
-        weight: 2,
-        fillColor: color,
-        fillOpacity: 1.0,
-      })
-        .bindPopup(`<b>Team: ${team.name}</b><br/>Role: ${team.role}<br/>Players: ${team.players.join(', ')}`)
+      const color = isHider ? '#f43f5e' : '#3b82f6'; // Pink/Red for Hider, Blue for Seeker
+      const isCurrentPlayer = player.name === userName;
+
+      // Beautiful custom pulse marker for each player
+      const markerHtml = `
+        <div style="
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+        ">
+          <div style="
+            width: 14px;
+            height: 14px;
+            background-color: ${color};
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 8px ${color};
+          "></div>
+          ${isCurrentPlayer ? `
+            <div style="
+              position: absolute;
+              width: 24px;
+              height: 24px;
+              border: 2px solid ${color};
+              border-radius: 50%;
+              animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+              opacity: 0.75;
+            "></div>
+          ` : ''}
+        </div>
+      `;
+
+      const customPlayerIcon = L.divIcon({
+        html: markerHtml,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+      });
+
+      L.marker([player.lat, player.lng], { icon: customPlayerIcon })
+        .bindTooltip(`<b>${player.name}</b>${isCurrentPlayer ? ' (You)' : ''}<br/>Team: ${player.team}`, {
+          permanent: true,
+          direction: 'top',
+          offset: [0, -8],
+          className: 'bg-slate-950/90 text-slate-200 border border-slate-800/50 text-[9px] px-1.5 py-0.5 rounded-md font-sans shadow-md'
+        })
         .addTo(layers);
 
-      // Pulse ring for the live hiding team
-      if (isCurrentHider) {
-        L.circle([team.lat, team.lng], {
-          radius: 50,
-          color: '#f43f5e',
+      // Pulse ring for player's visual presence
+      if (isCurrentPlayer) {
+        L.circle([player.lat, player.lng], {
+          radius: 15,
+          color,
           weight: 1,
-          fillColor: '#f43f5e',
+          fillColor: color,
           fillOpacity: 0.1,
         }).addTo(layers);
       }
