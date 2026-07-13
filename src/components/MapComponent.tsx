@@ -517,7 +517,11 @@ export default function MapComponent({
 
     // 4. Draw individual players
     room.players.forEach((player) => {
-      if (!player.lat || !player.lng) return;
+      const hasGps = player.lat !== undefined && player.lng !== undefined && player.lat !== room.centerLat && player.lng !== room.centerLng;
+      const lat = player.lat || room.centerLat;
+      const lng = player.lng || room.centerLng;
+
+      if (!lat || !lng) return;
 
       const playerTeamObj = room.teams.find((t) => t.name === player.team);
       const isHider = playerTeamObj?.role === 'HIDER';
@@ -571,8 +575,10 @@ export default function MapComponent({
         iconAnchor: [13, 13],
       });
 
-      L.marker([player.lat, player.lng], { icon: customPlayerIcon })
-        .bindTooltip(`<b>${player.name}</b>${isCurrentPlayer ? ' (You)' : ''}<br/>Team: ${player.team}`, {
+      const tooltipText = `<b>${player.name}</b>${isCurrentPlayer ? ' (You)' : ''}<br/>Team: ${player.team}${!hasGps ? '<br/><span style="color:#f59e0b; font-weight:bold;">⚠️ Waiting for GPS...</span>' : ''}`;
+
+      L.marker([lat, lng], { icon: customPlayerIcon })
+        .bindTooltip(tooltipText, {
           permanent: true,
           direction: 'top',
           offset: [0, -8],
@@ -582,7 +588,7 @@ export default function MapComponent({
 
       // Pulse ring for player's visual presence
       if (isCurrentPlayer) {
-        L.circle([player.lat, player.lng], {
+        L.circle([lat, lng], {
           radius: 15,
           color,
           weight: 1,

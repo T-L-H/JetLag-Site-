@@ -277,12 +277,15 @@ app.get('/api/rooms/:code', (req, res) => {
 // Join Room
 app.post('/api/rooms/:code/join', (req, res) => {
   const { code } = req.params;
-  const { playerName, teamName } = req.body;
+  const { playerName, teamName, lat, lng } = req.body;
   const room = rooms[code.toUpperCase()];
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
   }
+
+  const initialLat = (typeof lat === 'number') ? lat : room.centerLat;
+  const initialLng = (typeof lng === 'number') ? lng : room.centerLng;
 
   // Create player
   const playerId = `player_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -290,6 +293,8 @@ app.post('/api/rooms/:code/join', (req, res) => {
     id: playerId,
     name: playerName,
     team: teamName,
+    lat: initialLat,
+    lng: initialLng,
     lastUpdate: Date.now(),
   };
 
@@ -305,10 +310,20 @@ app.post('/api/rooms/:code/join', (req, res) => {
       role: 'SEEKER', // defaults to seeker
       score: 0,
       players: [playerName],
+      lat: initialLat,
+      lng: initialLng,
+      lastActive: Date.now(),
     };
     room.teams.push(team);
-  } else if (!team.players.includes(playerName)) {
-    team.players.push(playerName);
+  } else {
+    if (!team.players.includes(playerName)) {
+      team.players.push(playerName);
+    }
+    if (!team.lat || !team.lng || (team.lat === room.centerLat && team.lng === room.centerLng)) {
+      team.lat = initialLat;
+      team.lng = initialLng;
+      team.lastActive = Date.now();
+    }
   }
 
   addHistoryLog(room, `Player "${playerName}" joined Team "${teamName}".`);

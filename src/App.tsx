@@ -212,6 +212,25 @@ export default function App() {
 
   // --- API SERVICE CALLS ---
 
+  const getCurrentLocationHelper = (): Promise<{ lat: number; lng: number } | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (err) => {
+          console.warn('Geolocation lookup for join/create failed:', err);
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 3000, maximumAge: 0 }
+      );
+    });
+  };
+
   const handleCreateRoom = async (params: {
     centerLat: number;
     centerLng: number;
@@ -259,10 +278,18 @@ export default function App() {
 
       const teamToUse = params.gmTeam || params.teams[0] || 'Team Red';
 
+      // Fetch user's current GPS location before joining
+      const coords = await getCurrentLocationHelper();
+
       await fetch(`/api/rooms/${data.code}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerName: nameToUse, teamName: teamToUse }),
+        body: JSON.stringify({
+          playerName: nameToUse,
+          teamName: teamToUse,
+          lat: coords?.lat,
+          lng: coords?.lng,
+        }),
       });
     } catch (e) {
       alert('Error creating game session.');
@@ -289,10 +316,18 @@ export default function App() {
       setUserName(playerName);
       setIsGM(false);
 
+      // Fetch user's current GPS location before joining
+      const coords = await getCurrentLocationHelper();
+
       const response = await fetch(`/api/rooms/${code}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerName, teamName }),
+        body: JSON.stringify({
+          playerName,
+          teamName,
+          lat: coords?.lat,
+          lng: coords?.lng,
+        }),
       });
 
       const contentType = response.headers.get("content-type");
