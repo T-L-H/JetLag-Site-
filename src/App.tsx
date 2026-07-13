@@ -123,18 +123,20 @@ export default function App() {
 
     let lastReportedLat: number | null = null;
     let lastReportedLng: number | null = null;
+    let lastReportedAcc: number | null = null;
 
-    const reportLocation = (lat: number, lng: number) => {
-      if (lastReportedLat === lat && lastReportedLng === lng) {
+    const reportLocation = (lat: number, lng: number, accuracy?: number) => {
+      if (lastReportedLat === lat && lastReportedLng === lng && lastReportedAcc === accuracy) {
         return;
       }
       lastReportedLat = lat;
       lastReportedLng = lng;
+      lastReportedAcc = accuracy || null;
 
       fetch(`/api/rooms/${roomCode}/update-location`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerName: userName, lat, lng }),
+        body: JSON.stringify({ playerName: userName, lat, lng, accuracy }),
       }).catch((e) => console.warn('Failed reporting coordinates:', e));
     };
 
@@ -143,7 +145,7 @@ export default function App() {
     if (navigator.geolocation) {
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          reportLocation(pos.coords.latitude, pos.coords.longitude);
+          reportLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
         },
         (err) => {
           console.warn('Geolocation watch error:', err);
@@ -157,7 +159,7 @@ export default function App() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            reportLocation(pos.coords.latitude, pos.coords.longitude);
+            reportLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
           },
           (err) => {
             console.warn('Geolocation poll error:', err);

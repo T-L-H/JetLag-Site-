@@ -286,6 +286,7 @@ app.post('/api/rooms/:code/join', (req, res) => {
 
   const initialLat = (typeof lat === 'number') ? lat : room.centerLat;
   const initialLng = (typeof lng === 'number') ? lng : room.centerLng;
+  const gpsAcquired = (typeof lat === 'number' && typeof lng === 'number');
 
   // Create player
   const playerId = `player_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
@@ -296,6 +297,7 @@ app.post('/api/rooms/:code/join', (req, res) => {
     lat: initialLat,
     lng: initialLng,
     lastUpdate: Date.now(),
+    gpsAcquired,
   };
 
   // Add player
@@ -335,7 +337,7 @@ app.post('/api/rooms/:code/join', (req, res) => {
 // Update Location
 app.post('/api/rooms/:code/update-location', (req, res) => {
   const { code } = req.params;
-  const { playerName, lat, lng } = req.body;
+  const { playerName, lat, lng, accuracy } = req.body;
   const room = rooms[code];
 
   if (!room) {
@@ -347,6 +349,10 @@ app.post('/api/rooms/:code/update-location', (req, res) => {
     player.lat = lat;
     player.lng = lng;
     player.lastUpdate = Date.now();
+    player.gpsAcquired = true;
+    if (typeof accuracy === 'number') {
+      player.accuracy = accuracy;
+    }
 
     // Also update team coordinate representative
     const team = room.teams.find((t) => t.name === player.team);

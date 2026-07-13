@@ -25,6 +25,8 @@ export interface Player {
   lat?: number;
   lng?: number;
   lastUpdate?: number;
+  gpsAcquired?: boolean;
+  accuracy?: number;
 }
 
 export interface Team {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { RoomState, POI } from '../types';
 import { getDistance, generateDynamicPOIs, getGridN } from '../lib/geo';
 
@@ -142,6 +142,8 @@ export default function MapComponent({
   const mapRef = useRef<any>(null);
   const layerGroupRef = useRef<any>(null);
 
+  const [lockOnMe, setLockOnMe] = useState(true);
+
   // Initialize Map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -153,15 +155,22 @@ export default function MapComponent({
     const map = L.map(mapContainerRef.current, {
       zoomControl: true,
       attributionControl: false,
+      maxZoom: 22,
     }).setView(center, zoom);
 
-    // CartoDB Dark Matter - Beautiful dark modern tiles
+    // CartoDB Dark Matter - Beautiful dark modern tiles with ultra-zoom tile stretching
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
+      maxZoom: 22,
+      maxNativeZoom: 19,
     }).addTo(map);
 
     mapRef.current = map;
     layerGroupRef.current = L.layerGroup().addTo(map);
+
+    // Turn off auto-centering lock if the user manually drags the map
+    map.on('dragstart', () => {
+      setLockOnMe(false);
+    });
 
     // Setup interactive pin drop listener on click
     map.on('click', (e: any) => {
@@ -236,6 +245,25 @@ export default function MapComponent({
     room.players.find((p) => p.name === room.activeThermometer?.seekerName)?.lat,
     room.players.find((p) => p.name === room.activeThermometer?.seekerName)?.lng,
     room.activeQuestion?.id
+  ]);
+
+  // Smooth auto-follow current player when lockOnMe is enabled
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !lockOnMe) return;
+
+    const me = room.players.find((p) => p.name === userName);
+    if (me && me.lat && me.lng) {
+      const currentZoom = map.getZoom();
+      // Keep their deep zoom (e.g. 21) or default to 18 so movement is extremely clear
+      const targetZoom = currentZoom && currentZoom > 18 ? currentZoom : 18;
+      map.setView([me.lat, me.lng], targetZoom, { animate: true });
+    }
+  }, [
+    lockOnMe,
+    room.players.find((p) => p.name === userName)?.lat,
+    room.players.find((p) => p.name === userName)?.lng,
+    userName
   ]);
 
   // Redraw overlays whenever state, pins, or players change
@@ -517,7 +545,7 @@ export default function MapComponent({
 
     // 4. Draw individual players
     room.players.forEach((player) => {
-      const hasGps = player.lat !== undefined && player.lng !== undefined && player.lat !== room.centerLat && player.lng !== room.centerLng;
+      const hasGps = !!player.gpsAcquired;
       const lat = player.lat || room.centerLat;
       const lng = player.lng || room.centerLng;
 
@@ -588,13 +616,31 @@ export default function MapComponent({
 
       // Pulse ring for player's visual presence
       if (isCurrentPlayer) {
+        // Core local proximity pulse (representing ~40 feet)
         L.circle([lat, lng], {
-          radius: 15,
+          radius: 12,
           color,
-          weight: 1,
+          weight: 1.5,
           fillColor: color,
-          fillOpacity: 0.1,
+          fillOpacity: 0.15,
         }).addTo(layers);
+
+        // Real GPS accuracy circle representing device reporting uncertainty
+        if (player.accuracy) {
+          L.circle([lat, lng], {
+            radius: player.accuracy,
+            color: '#10b981', // High contrast emerald green for GPS signal confidence
+            weight: 1,
+            dashArray: '3, 6',
+            fillColor: '#10b981',
+            fillOpacity: 0.04,
+          })
+            .bindTooltip(`GPS Accuracy: ±${player.accuracy.toFixed(1)} m (${(player.accuracy * 3.28084).toFixed(0)} ft)`, {
+              sticky: true,
+              className: 'bg-slate-950 text-emerald-300 border border-emerald-500/20 text-[9px] rounded-md px-1.5 py-0.5'
+            })
+            .addTo(layers);
+        }
       }
     });
 
@@ -749,9 +795,61 @@ export default function MapComponent({
     previewTentacleDistance
   ]);
 
+  const me = room.players.find((p) => p.name === userName);
+
+  const handleRecenter = () => {
+    setLockOnMe(true);
+    const map = mapRef.current;
+    if (map && me && me.lat && me.lng) {
+      const currentZoom = map.getZoom();
+      // Zoom into level 19 for close tracking if currently zoomed out
+      const targetZoom = currentZoom && currentZoom > 19 ? currentZoom : 19;
+      map.setView([me.lat, me.lng], targetZoom, { animate: true });
+    }
+  };
+
   return (
     <div className="relative w-full h-full min-h-full md:min-h-[400px] md:rounded-2xl overflow-hidden md:border md:border-slate-800 md:shadow-2xl">
       <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '100%' }} />
+
+      {/* Floating GPS lock-on control and real-world accuracy HUD */}
+      <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end space-y-2 pointer-events-none">
+        <button
+          onClick={handleRecenter}
+          className={`pointer-events-auto flex items-center space-x-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all duration-300 border ${
+            lockOnMe
+              ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50 hover:bg-emerald-900/90'
+              : 'bg-slate-900/90 text-slate-300 border-slate-800 hover:bg-slate-800/90'
+          }`}
+          title="Locks map viewport centered on your physical position"
+        >
+          <svg
+            className={`w-3.5 h-3.5 ${lockOnMe ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            strokeWidth="2.5"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+            <circle cx="12" cy="12" r="3" fill="currentColor" />
+          </svg>
+          <span>{lockOnMe ? 'GPS Active' : 'Lock on Me'}</span>
+        </button>
+
+        {me && (
+          <div className="bg-slate-950/85 backdrop-blur-md border border-slate-800 px-3 py-1.5 rounded-xl flex flex-col space-y-0.5 text-right shadow-md">
+            <span className="text-[10px] text-slate-400 font-mono">
+              Signal: <span className={me.gpsAcquired ? 'text-emerald-400 font-semibold' : 'text-amber-400'}>{me.gpsAcquired ? 'ACTIVE' : 'OFFLINE'}</span>
+            </span>
+            {me.accuracy !== undefined && (
+              <span className="text-[9px] text-slate-300 font-mono">
+                Accuracy: ±{(me.accuracy * 3.28084).toFixed(0)} ft ({me.accuracy.toFixed(1)}m)
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       {selectionMode && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-slate-900/90 backdrop-blur-md border border-amber-500/50 px-4 py-2 rounded-full text-sm font-medium text-amber-300 shadow-lg z-[1000] flex items-center space-x-2 animate-pulse">
