@@ -140,21 +140,44 @@ export default function App() {
       }).catch((e) => console.warn('Failed reporting coordinates:', e));
     };
 
-    // Use native browser Geolocation
+    // Use native browser Geolocation with robust high -> low fallback and warm caching
     let watchId: number | null = null;
-    if (navigator.geolocation) {
+    let fallbackWatchId: number | null = null;
+
+    const startWatching = () => {
+      if (!navigator.geolocation) return;
+
+      // Start high accuracy watch
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
           reportLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
         },
         (err) => {
-          console.warn('Geolocation watch error:', err);
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-      );
-    }
+          console.warn('High accuracy watch failed or timed out, starting low-accuracy fallback:', err);
+          
+          // Clear any existing fallback first
+          if (fallbackWatchId !== null) {
+            navigator.geolocation.clearWatch(fallbackWatchId);
+          }
 
-    // Secondary Poller to force-wake the GPS chip and bypass HMR/Background sleep restrictions
+          // Fallback watch: lower accuracy, high cache allowance (highly reliable indoors/cellular)
+          fallbackWatchId = navigator.geolocation.watchPosition(
+            (pos) => {
+              reportLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+            },
+            (fallbackErr) => {
+              console.error('All watchPosition options failed:', fallbackErr);
+            },
+            { enableHighAccuracy: false, timeout: 20000, maximumAge: 30000 }
+          );
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+      );
+    };
+
+    startWatching();
+
+    // Secondary Poller to force-wake GPS and bypass background sleep restrictions
     const intervalId = setInterval(() => {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -162,16 +185,26 @@ export default function App() {
             reportLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
           },
           (err) => {
-            console.warn('Geolocation poll error:', err);
+            // Poll error fallback
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                reportLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+              },
+              (err2) => {
+                console.warn('GPS polling failed entirely:', err2);
+              },
+              { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+            );
           },
-          { enableHighAccuracy: true, timeout: 4000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
         );
       }
-    }, 3000);
+    }, 4000);
 
     return () => {
-      if (watchId !== null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchId);
+      if (navigator.geolocation) {
+        if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+        if (fallbackWatchId !== null) navigator.geolocation.clearWatch(fallbackWatchId);
       }
       clearInterval(intervalId);
     };
@@ -220,15 +253,26 @@ export default function App() {
         resolve(null);
         return;
       }
+      // Try high-accuracy first with a reasonable 8s timeout and a warm 10s maximumAge
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
         (err) => {
-          console.warn('Geolocation lookup for join/create failed:', err);
-          resolve(null);
+          console.warn('Initial high-accuracy geolocation failed/timed out, attempting low-accuracy fallback...', err);
+          // Fallback to low accuracy (which parses cell tower and WiFi routers almost instantly)
+          navigator.geolocation.getCurrentPosition(
+            (fallbackPos) => {
+              resolve({ lat: fallbackPos.coords.latitude, lng: fallbackPos.coords.longitude });
+            },
+            (fallbackErr) => {
+              console.error('All initial geolocation attempts failed:', fallbackErr);
+              resolve(null);
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+          );
         },
-        { enableHighAccuracy: true, timeout: 3000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
       );
     });
   };

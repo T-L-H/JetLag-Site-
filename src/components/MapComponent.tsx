@@ -851,6 +851,33 @@ export default function MapComponent({
         )}
       </div>
 
+      {/* Elegant Iframe Sandbox Warning - Only shown when GPS signal is offline */}
+      {me && !me.gpsAcquired && (
+        <div className="absolute bottom-4 left-4 right-4 md:right-auto md:max-w-xs z-[1000] bg-slate-950/95 backdrop-blur-md border border-amber-500/30 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-start space-x-2.5">
+            <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400">
+              <svg className="w-4 h-4 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 block">GPS Sandbox Notice</span>
+              <p className="text-[11px] text-slate-300 font-medium leading-relaxed mt-1">
+                Embedded browser iframes block device geolocation. Please click the button below to open the app in a new tab for native live GPS tracking:
+              </p>
+            </div>
+          </div>
+          <a
+            href={window.location.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-2 px-4 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-[#030712] rounded-xl text-xs font-black tracking-wider uppercase transition-all text-center border border-emerald-400/20 shadow-lg block"
+          >
+            ↗️ Open in New Tab
+          </a>
+        </div>
+      )}
+
       {selectionMode && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-slate-900/90 backdrop-blur-md border border-amber-500/50 px-4 py-2 rounded-full text-sm font-medium text-amber-300 shadow-lg z-[1000] flex items-center space-x-2 animate-pulse">
           <span>📍 Click on the map to drop the {selectionMode === 'CUSTOM_PIN' ? 'Target Pin' : 'Transit Drop Pin'}</span>
