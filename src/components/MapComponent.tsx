@@ -149,7 +149,9 @@ export default function MapComponent({
     if (!mapContainerRef.current || mapRef.current) return;
 
     // Default view to game center
-    const center: [number, number] = [room.centerLat, room.centerLng];
+    const centerLat = room.centerLat || 40.7128;
+    const centerLng = room.centerLng || -74.0060;
+    const center: [number, number] = [centerLat, centerLng];
     const zoom = room.gameSize === 'S' ? 14 : room.gameSize === 'M' ? 12 : 9;
 
     const map = L.map(mapContainerRef.current, {
@@ -179,6 +181,13 @@ export default function MapComponent({
       }
     });
 
+    // Initial size invalidation to make sure map fits beautifully
+    setTimeout(() => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    }, 150);
+
     // Clean up
     return () => {
       if (mapRef.current) {
@@ -187,6 +196,33 @@ export default function MapComponent({
       }
     };
   }, [room.centerLat, room.centerLng, room.gameSize]);
+
+  // Handle container resizing automatically to solve collapsed layout bugs on mobile/Safari
+  useEffect(() => {
+    const map = mapRef.current;
+    const container = mapContainerRef.current;
+    if (!map || !container) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    });
+
+    resizeObserver.observe(container);
+
+    // Extra trigger in case container has late layout shift
+    const interval = setInterval(() => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    }, 1500);
+
+    return () => {
+      resizeObserver.disconnect();
+      clearInterval(interval);
+    };
+  }, []);
 
   // Re-enable click triggers if selection mode changes
   useEffect(() => {
@@ -216,7 +252,7 @@ export default function MapComponent({
     if (!map) return;
 
     if (room.activeThermometer) {
-      const activeSeeker = room.players.find((p) => p.name === room.activeThermometer?.seekerName);
+      const activeSeeker = (room.players || []).find((p) => p.name === room.activeThermometer?.seekerName);
       if (activeSeeker && activeSeeker.lat && activeSeeker.lng) {
         map.setView([activeSeeker.lat, activeSeeker.lng], 16, { animate: true });
         return;
@@ -242,8 +278,8 @@ export default function MapComponent({
     }
   }, [
     room.activeThermometer?.seekerName,
-    room.players.find((p) => p.name === room.activeThermometer?.seekerName)?.lat,
-    room.players.find((p) => p.name === room.activeThermometer?.seekerName)?.lng,
+    (room.players || []).find((p) => p.name === room.activeThermometer?.seekerName)?.lat,
+    (room.players || []).find((p) => p.name === room.activeThermometer?.seekerName)?.lng,
     room.activeQuestion?.id
   ]);
 
@@ -252,7 +288,7 @@ export default function MapComponent({
     const map = mapRef.current;
     if (!map || !lockOnMe) return;
 
-    const me = room.players.find((p) => p.name === userName);
+    const me = (room.players || []).find((p) => p.name === userName);
     if (me && me.lat && me.lng) {
       const currentZoom = map.getZoom();
       // Keep their deep zoom or default to 16 so they can see surrounding pins and context
@@ -261,8 +297,8 @@ export default function MapComponent({
     }
   }, [
     lockOnMe,
-    room.players.find((p) => p.name === userName)?.lat,
-    room.players.find((p) => p.name === userName)?.lng,
+    (room.players || []).find((p) => p.name === userName)?.lat,
+    (room.players || []).find((p) => p.name === userName)?.lng,
     userName
   ]);
 
@@ -275,10 +311,15 @@ export default function MapComponent({
     // Clear previous elements
     layers.clearLayers();
 
+    // Safely extract coordinates and properties with reliable defaults to prevent crashes
+    const centerLat = room.centerLat || 40.7128;
+    const centerLng = room.centerLng || -74.0060;
+    const radiusMiles = room.radiusMiles || 5;
+
     // Identify seeker team position
-    const seekerTeam = room.teams.find((t) => t.role === 'SEEKER');
-    const seekerLat = seekerTeam?.lat || room.centerLat;
-    const seekerLng = seekerTeam?.lng || room.centerLng;
+    const seekerTeam = (room.teams || []).find((t) => t.role === 'SEEKER');
+    const seekerLat = seekerTeam?.lat || centerLat;
+    const seekerLng = seekerTeam?.lng || centerLng;
 
     // 1. Draw outer Game Area boundary (polygon if exists, otherwise circle)
     if (room.customPolygon && room.customPolygon.length >= 3) {
@@ -290,8 +331,8 @@ export default function MapComponent({
         dashArray: '3, 6',
       }).addTo(layers);
     } else {
-      L.circle([room.centerLat, room.centerLng], {
-        radius: room.radiusMiles * 1609.34, // convert miles to meters
+      L.circle([centerLat, centerLng], {
+        radius: radiusMiles * 1609.34, // convert miles to meters
         color: '#38bdf8', // Neon Sky Blue
         weight: 2,
         fillColor: '#0c4a6e',
@@ -302,34 +343,39 @@ export default function MapComponent({
 
     // 2. Draw Active Grid Cells (Active = Neon Cyan, Inactive = completely empty/sliced)
     // To make it super fast, we only draw active cells
-    const activeCells = room.grid.filter((cell) => cell.active);
+    const activeCells = (room.grid || []).filter((cell) => cell.active);
     
     // Grid coordinate resolution calculations (approximate lat/lng box size)
-    const N = getGridN(room.radiusMiles);
+    const N = getGridN(radiusMiles);
     const milesPerDegreeLat = 69.0;
-    const milesPerDegreeLng = 69.0 * Math.cos((room.centerLat * Math.PI) / 180);
-    const cellLatSpan = (room.radiusMiles / milesPerDegreeLat) * 2 / (N - 1);
-    const cellLngSpan = (room.radiusMiles / milesPerDegreeLng) * 2 / (N - 1);
+    const milesPerDegreeLng = 69.0 * Math.cos((centerLat * Math.PI) / 180);
+    const cellLatSpan = (radiusMiles / milesPerDegreeLat) * 2 / (N - 1);
+    const cellLngSpan = (radiusMiles / milesPerDegreeLng) * 2 / (N - 1);
 
-    activeCells.forEach((cell) => {
-      const bounds = [
-        [cell.lat - cellLatSpan / 2, cell.lng - cellLngSpan / 2],
-        [cell.lat + cellLatSpan / 2, cell.lng + cellLngSpan / 2],
-      ];
+    if (!isNaN(cellLatSpan) && !isNaN(cellLngSpan) && isFinite(cellLatSpan) && isFinite(cellLngSpan)) {
+      activeCells.forEach((cell) => {
+        // Double check cell lat/lng are valid coordinates before adding rectangle
+        if (cell && typeof cell.lat === 'number' && typeof cell.lng === 'number' && !isNaN(cell.lat) && !isNaN(cell.lng)) {
+          const bounds = [
+            [cell.lat - cellLatSpan / 2, cell.lng - cellLngSpan / 2],
+            [cell.lat + cellLatSpan / 2, cell.lng + cellLngSpan / 2],
+          ];
 
-      L.rectangle(bounds, {
-        color: '#06b6d4', // cyan border
-        weight: 0.5,
-        fillColor: '#0891b2',
-        fillOpacity: 0.18,
-      }).addTo(layers);
-    });
+          L.rectangle(bounds, {
+            color: '#06b6d4', // cyan border
+            weight: 0.5,
+            fillColor: '#0891b2',
+            fillOpacity: 0.18,
+          }).addTo(layers);
+        }
+      });
+    }
 
     // 3. Draw dynamic POIs if game is started
     if (room.gamePhase !== 'LOBBY') {
       const pois = room.pois && room.pois.length > 0
         ? room.pois
-        : generateDynamicPOIs(room.centerLat, room.centerLng, room.radiusMiles);
+        : generateDynamicPOIs(centerLat, centerLng, radiusMiles);
 
       // Find closest POI of matching category to seeker if previewing MATCHING or TENTACLES
       let closestPoi: any = null;
@@ -795,7 +841,7 @@ export default function MapComponent({
     previewTentacleDistance
   ]);
 
-  const me = room.players.find((p) => p.name === userName);
+  const me = (room.players || []).find((p) => p.name === userName);
 
   const handleRecenter = () => {
     setLockOnMe(true);
@@ -809,8 +855,8 @@ export default function MapComponent({
   };
 
   return (
-    <div className="relative w-full h-full min-h-full md:min-h-[400px] md:rounded-2xl overflow-hidden md:border md:border-slate-800 md:shadow-2xl">
-      <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: '100%' }} />
+    <div className="absolute inset-0 w-full h-full md:rounded-2xl overflow-hidden md:border md:border-slate-800 md:shadow-2xl">
+      <div ref={mapContainerRef} className="w-full h-full bg-slate-950" />
 
       {/* Floating GPS lock-on control and real-world accuracy HUD */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end space-y-2 pointer-events-none">

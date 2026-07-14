@@ -311,6 +311,33 @@ export default function LobbyView({
     };
   }, [room]);
 
+  // Handle container resizing automatically to solve collapsed layout bugs on mobile/Safari for setup map
+  useEffect(() => {
+    const map = setupMapRef.current;
+    const container = setupMapContainerRef.current;
+    if (!map || !container) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (setupMapRef.current) {
+        setupMapRef.current.invalidateSize();
+      }
+    });
+
+    resizeObserver.observe(container);
+
+    // Initial delay trigger to align with late layout shifts
+    const timeout = setTimeout(() => {
+      if (setupMapRef.current) {
+        setupMapRef.current.invalidateSize();
+      }
+    }, 200);
+
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(timeout);
+    };
+  }, []);
+
   // Synchronize map representation when parameter states change externally
   useEffect(() => {
     const map = setupMapRef.current;
