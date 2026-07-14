@@ -255,8 +255,8 @@ export default function MapComponent({
     const me = room.players.find((p) => p.name === userName);
     if (me && me.lat && me.lng) {
       const currentZoom = map.getZoom();
-      // Keep their deep zoom or default to 21 so physical movement is extremely obvious
-      const targetZoom = currentZoom && currentZoom > 21 ? currentZoom : 21;
+      // Keep their deep zoom or default to 16 so they can see surrounding pins and context
+      const targetZoom = currentZoom && currentZoom > 16 ? currentZoom : 16;
       map.setView([me.lat, me.lng], targetZoom, { animate: true });
     }
   }, [
@@ -802,8 +802,8 @@ export default function MapComponent({
     const map = mapRef.current;
     if (map && me && me.lat && me.lng) {
       const currentZoom = map.getZoom();
-      // Zoom into level 21 for close tracking if currently zoomed out
-      const targetZoom = currentZoom && currentZoom > 21 ? currentZoom : 21;
+      // Zoom into level 16 for close tracking with surrounding context if currently zoomed out
+      const targetZoom = currentZoom && currentZoom > 16 ? currentZoom : 16;
       map.setView([me.lat, me.lng], targetZoom, { animate: true });
     }
   };
