@@ -255,8 +255,8 @@ export default function MapComponent({
     const me = room.players.find((p) => p.name === userName);
     if (me && me.lat && me.lng) {
       const currentZoom = map.getZoom();
-      // Keep their deep zoom (e.g. 21) or default to 18 so movement is extremely clear
-      const targetZoom = currentZoom && currentZoom > 18 ? currentZoom : 18;
+      // Keep their deep zoom or default to 21 so physical movement is extremely obvious
+      const targetZoom = currentZoom && currentZoom > 21 ? currentZoom : 21;
       map.setView([me.lat, me.lng], targetZoom, { animate: true });
     }
   }, [
@@ -802,8 +802,8 @@ export default function MapComponent({
     const map = mapRef.current;
     if (map && me && me.lat && me.lng) {
       const currentZoom = map.getZoom();
-      // Zoom into level 19 for close tracking if currently zoomed out
-      const targetZoom = currentZoom && currentZoom > 19 ? currentZoom : 19;
+      // Zoom into level 21 for close tracking if currently zoomed out
+      const targetZoom = currentZoom && currentZoom > 21 ? currentZoom : 21;
       map.setView([me.lat, me.lng], targetZoom, { animate: true });
     }
   };
@@ -861,20 +861,57 @@ export default function MapComponent({
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 block">GPS Sandbox Notice</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 block">
+                {window.self !== window.top ? 'GPS Sandbox Notice' : 'GPS Signal Required'}
+              </span>
               <p className="text-[11px] text-slate-300 font-medium leading-relaxed mt-1">
-                Embedded browser iframes block device geolocation. Please click the button below to open the app in a new tab for native live GPS tracking:
+                {window.self !== window.top 
+                  ? 'Embedded browser iframes block device geolocation. Please click the button below to open the app in a new tab for native live GPS tracking:'
+                  : 'Waiting for live GPS. Your browser requires a direct click gesture to prompt and verify location access.'
+                }
               </p>
             </div>
           </div>
-          <a
-            href={window.location.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-2 px-4 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-[#030712] rounded-xl text-xs font-black tracking-wider uppercase transition-all text-center border border-emerald-400/20 shadow-lg block"
-          >
-            ↗️ Open in New Tab
-          </a>
+          {window.self !== window.top ? (
+            <a
+              href={window.location.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2 px-4 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-[#030712] rounded-xl text-xs font-black tracking-wider uppercase transition-all text-center border border-emerald-400/20 shadow-lg block animate-pulse"
+            >
+              ↗️ Open in New Tab
+            </a>
+          ) : (
+            <button
+              onClick={() => {
+                if (!navigator.geolocation) {
+                  alert("Geolocation is not supported by your browser.");
+                  return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => {
+                    fetch(`/api/rooms/${room.code}/update-location`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        playerName: userName,
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy
+                      }),
+                    }).catch((e) => console.warn('Failed manual coordinate update:', e));
+                  },
+                  (err) => {
+                    alert(`GPS Permission or signal error: ${err.message}. Please check your phone settings under Settings > Safari/Chrome > Location and allow access.`);
+                  },
+                  { enableHighAccuracy: true, timeout: 10000 }
+                );
+              }}
+              className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 rounded-xl text-xs font-black tracking-wider uppercase transition-all text-center border border-amber-400/20 shadow-lg block cursor-pointer"
+            >
+              🎯 Enable Live GPS
+            </button>
+          )}
         </div>
       )}
 

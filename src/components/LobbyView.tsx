@@ -59,6 +59,59 @@ export default function LobbyView({
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [manualGPSVerifying, setManualGPSVerifying] = useState(false);
+
+  const handleManualGPSVerify = () => {
+    if (!room) return;
+    setManualGPSVerifying(true);
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      setManualGPSVerifying(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy;
+
+        fetch(`/api/rooms/${room.code}/update-location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playerName: userName, lat, lng, accuracy }),
+        })
+        .then(() => {
+          audio.playSuccess();
+        })
+        .catch((e) => {
+          console.warn('Failed manual coordinate update inside lobby:', e);
+        })
+        .finally(() => {
+          setManualGPSVerifying(false);
+        });
+      },
+      (err) => {
+        setManualGPSVerifying(false);
+        let errorMsg = "Unable to retrieve location. ";
+        if (err.code === 1) {
+          errorMsg += "Location permission was denied. Please check your browser/phone settings under Settings > Safari/Chrome > Location and allow access for this website.";
+        } else if (err.code === 2) {
+          errorMsg += "Device GPS receiver is unavailable right now.";
+        } else if (err.code === 3) {
+          errorMsg += "GPS timeout. Try moving closer to windows or outdoors.";
+        } else {
+          errorMsg += err.message;
+        }
+        alert(errorMsg);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
 
   // Custom shape (polygon) drawing states and refs
   const [mapMode, setMapMode] = useState<'CIRCLE' | 'POLYGON'>('CIRCLE');
@@ -1246,15 +1299,80 @@ export default function LobbyView({
                 className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-900 rounded-xl"
               >
                 <div className="flex items-center space-x-2">
-                  <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <div className={`w-2.5 h-2.5 rounded-full ${player.gpsAcquired ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
                   <span className="text-xs font-semibold text-slate-300">{player.name}</span>
                 </div>
-                <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-lg">
-                  {player.team}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg border ${
+                    player.gpsAcquired 
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                  }`}>
+                    {player.gpsAcquired 
+                      ? `GPS OK ${player.accuracy ? `(±${Math.round(player.accuracy * 3.28084)}ft)` : ''}`
+                      : 'GPS Pending'
+                    }
+                  </span>
+                  <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-lg">
+                    {player.team}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
+
+          {/* Personal GPS check block */}
+          {(() => {
+            const me = room.players.find(p => p.name === userName);
+            if (!me) return null;
+            return (
+              <div className="pt-3 border-t border-slate-800/80 space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Your GPS Status</span>
+                {me.gpsAcquired ? (
+                  <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3 flex flex-col space-y-1">
+                    <div className="flex items-center space-x-1.5 text-emerald-400">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                      <span className="text-[11px] font-bold uppercase tracking-wide">Live GPS Verified</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-normal">
+                      Reporting live coordinates (accuracy ±{me.accuracy ? Math.round(me.accuracy * 3.28084) : '??'} ft). You're ready!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex flex-col space-y-2">
+                    <div className="flex items-center space-x-1.5 text-amber-400">
+                      <div className="w-2 h-2 bg-amber-500 rounded-full animate-ping" />
+                      <span className="text-[11px] font-bold uppercase tracking-wide">GPS Offline / Pending</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-normal">
+                      {window.self !== window.top 
+                        ? "Embedded iframes block GPS. Open in a new tab first."
+                        : "iOS Safari & Chrome block location tracking until you click to grant permission."
+                      }
+                    </p>
+                    {window.self !== window.top ? (
+                      <a
+                        href={window.location.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full text-center py-2 bg-emerald-500 text-slate-950 rounded-lg text-xs font-black tracking-wide uppercase transition-all shadow-md active:scale-95 cursor-pointer block"
+                      >
+                        ↗️ Open in New Tab
+                      </a>
+                    ) : (
+                      <button
+                        onClick={handleManualGPSVerify}
+                        disabled={manualGPSVerifying}
+                        className="w-full py-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 rounded-lg text-xs font-black tracking-wide uppercase transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center space-x-1.5"
+                      >
+                        <span>🎯 {manualGPSVerifying ? 'Verifying...' : 'Enable Live GPS'}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {isGMAndLobbyOwner ? (
             <div className="pt-4 border-t border-slate-800/80">
