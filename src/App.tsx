@@ -628,6 +628,40 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#0a0d16] text-slate-100 font-sans">
+      {/* Jet Lag Zone Infringement Dismissible Alert Banner for Seekers */}
+      {room && !isHider && room.hiderLeftZone && !room.hiderLeftZoneAlertDismissedBySeeker && (
+        <div className="absolute top-20 left-4 right-4 z-[4000] max-w-xl mx-auto animate-bounce">
+          <div className="bg-[#1a0f12]/95 backdrop-blur-md border border-rose-500/40 rounded-2xl p-4 shadow-2xl flex items-center justify-between gap-4 text-left">
+            <div className="flex items-start space-x-3">
+              <div className="p-2 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-500 shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-400 animate-pulse" />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-rose-400 block">
+                  ZONE INFRINGEMENT ALERT
+                </span>
+                <p className="text-xs text-slate-200 font-bold leading-relaxed mt-0.5">
+                  ⚠️ The Hider has left their mandatory hiding zone circle! (Allowed: {room.gameSize === 'L' ? '1/2' : '1/4'} mile)
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                audio.playClick();
+                try {
+                  await fetch(`/api/rooms/${room.code}/dismiss-zone-alert`, { method: 'POST' });
+                } catch (e) {
+                  console.error(e);
+                }
+              }}
+              className="px-3 py-1.5 bg-rose-500 hover:bg-rose-400 text-slate-950 rounded-xl text-[10px] font-black tracking-wider uppercase transition-colors shrink-0 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header bar */}
       <header className="flex justify-between items-center h-16 px-4 md:px-6 bg-[#0e1322] border-b border-slate-900 shadow-md shrink-0 select-none">
         <div className="flex items-center space-x-3">
@@ -811,11 +845,36 @@ export default function App() {
                 <div className="bg-slate-950/60 border border-slate-900 rounded-2xl p-3 text-left">
                   <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 block mb-2">Live Match Event Feed</span>
                   <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1 text-[10px] font-medium leading-relaxed">
-                    {room.history.slice(0, 10).map((log, idx) => (
-                      <p key={idx} className="text-slate-400 select-none">
-                        {log}
-                      </p>
-                    ))}
+                    {room.history
+                      .filter((log) => {
+                        // Apply secrecy filtering if user is on the seeker team
+                        const hiderTeamName = room.teams[room.hiderTeamIndex]?.name;
+                        const isSeeker = room.players.find((p) => p.name === userName)?.team !== hiderTeamName;
+                        if (isSeeker) {
+                          const lowercase = log.toLowerCase();
+                          if (
+                            lowercase.includes('card draft') ||
+                            lowercase.includes('rewarded: drew') ||
+                            lowercase.includes('hand size') ||
+                            lowercase.includes('hider played') ||
+                            lowercase.includes('hider discarded') ||
+                            lowercase.includes('hider attempted to play') ||
+                            lowercase.includes('vetoed') ||
+                            lowercase.includes('banned') ||
+                            lowercase.includes('chalice active') ||
+                            lowercase.includes('extra card option')
+                          ) {
+                            return false;
+                          }
+                        }
+                        return true;
+                      })
+                      .slice(0, 10)
+                      .map((log, idx) => (
+                        <p key={idx} className="text-slate-400 select-none">
+                          {log}
+                        </p>
+                      ))}
                   </div>
                 </div>
               )}

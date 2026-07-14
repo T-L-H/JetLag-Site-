@@ -362,6 +362,28 @@ app.post('/api/rooms/:code/update-location', (req, res) => {
       team.lastActive = Date.now();
     }
 
+    // Check if player is on the Hider team and has a registered station pin
+    const isHiderPlayer = player.team === room.teams[room.hiderTeamIndex]?.name;
+    if (isHiderPlayer && room.hidingStationPin) {
+      const distFromStation = getDistance(room.hidingStationPin.lat, room.hidingStationPin.lng, lat, lng);
+      const allowedRadius = room.gameSize === 'L' ? 0.5 : 0.25; // 1/2 mile for Large, 1/4 mile for Small/Medium
+      
+      if (distFromStation > allowedRadius) {
+        if (!room.hiderLeftZone) {
+          room.hiderLeftZone = true;
+          room.hiderLeftZoneAlertDismissedBySeeker = false;
+          addHistoryLog(room, `⚠️ MANDATORY ZONE INFRINGEMENT: Hider has left the mandatory zone! (Distance: ${distFromStation.toFixed(2)} mi, Allowed: ${allowedRadius} mi)`);
+        }
+      } else {
+        // If they returned to the zone, we can reset the state
+        if (room.hiderLeftZone) {
+          room.hiderLeftZone = false;
+          room.hiderLeftZoneAlertDismissedBySeeker = false;
+          addHistoryLog(room, `✅ Hider has returned inside the mandatory zone.`);
+        }
+      }
+    }
+
     // Update active thermometer path if this player is the tracking seeker
     if (room.activeThermometer && room.activeThermometer.seekerName === playerName) {
       const path = room.activeThermometer.path || [];
@@ -387,6 +409,21 @@ app.post('/api/rooms/:code/update-location', (req, res) => {
   }
 
   broadcastRoom(code);
+  res.json({ success: true });
+});
+
+// Dismiss Zone Alert for Seeker
+app.post('/api/rooms/:code/dismiss-zone-alert', (req, res) => {
+  const { code } = req.params;
+  const room = rooms[code];
+
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  room.hiderLeftZoneAlertDismissedBySeeker = true;
+  broadcastRoom(code);
+
   res.json({ success: true });
 });
 

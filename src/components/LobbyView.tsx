@@ -499,7 +499,7 @@ export default function LobbyView({
     setSelectedPresetIndex(idx);
     setCustomLat(preset.lat.toFixed(6));
     setCustomLng(preset.lng.toFixed(6));
-    const rad = size === 'S' ? 1.5 : size === 'M' ? 5.0 : 12.0;
+    const rad = size === 'S' ? 2.25 : size === 'M' ? 15.0 : 112.5;
     setCustomRadius(rad.toString());
 
     if (setupMapRef.current) {
@@ -788,7 +788,7 @@ export default function LobbyView({
                     key={s}
                     onClick={() => {
                       setSize(s);
-                      const rad = s === 'S' ? 1.5 : s === 'M' ? 5.0 : 12.0;
+                      const rad = s === 'S' ? 2.25 : s === 'M' ? 15.0 : 112.5;
                       setCustomRadius(rad.toString());
                       audio.playClick();
                     }}
@@ -800,7 +800,7 @@ export default function LobbyView({
                   >
                     <span className="text-xs font-bold">{s === 'S' ? 'Small' : s === 'M' ? 'Medium' : 'Large'}</span>
                     <span className="text-[9px] opacity-75 font-normal mt-0.5 text-center">
-                      {s === 'S' ? '1.5mi • Compact' : s === 'M' ? '5.0mi • Standard' : '12.0mi • Expansive'}
+                      {s === 'S' ? '2.25mi • Compact' : s === 'M' ? '15.0mi • Standard' : '112.5mi • Expansive'}
                     </span>
                   </button>
                 ))}

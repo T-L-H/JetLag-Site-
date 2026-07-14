@@ -19,6 +19,7 @@ interface HiderViewProps {
   enableTransitSelection: () => void;
   transitPin: { lat: number; lng: number } | null;
   onPickDraft: (cardIds: string[]) => void;
+  onSetTransitPin?: (pin: { lat: number; lng: number } | null) => void;
 }
 
 // Standard Haversine distance in miles
@@ -65,8 +66,9 @@ function evaluateActiveQuestion(room: RoomState): EvaluationResult | null {
   const hiderLng = hiderTeam?.lng || room.centerLng;
 
   const seekerTeam = room.teams.find((t) => t.role === 'SEEKER');
-  const seekerLat = seekerTeam?.lat || room.centerLat;
-  const seekerLng = seekerTeam?.lng || room.centerLng;
+  // Use active question's customPin as the seeker's station coordinates, fallback to live seeker coordinates
+  const seekerLat = q.customPin?.lat || seekerTeam?.lat || room.centerLat;
+  const seekerLng = q.customPin?.lng || seekerTeam?.lng || room.centerLng;
 
   const pois = room.pois || [];
 
@@ -358,6 +360,7 @@ export default function HiderView({
   enableTransitSelection,
   transitPin,
   onPickDraft,
+  onSetTransitPin,
 }: HiderViewProps) {
   // Navigation & interaction states
   const [activeTab, setActiveTab] = useState<'HAND' | 'STATUS' | 'QUESTIONS'>('HAND');
@@ -613,12 +616,43 @@ export default function HiderView({
             ) : (
               <button
                 onClick={() => {
-                  enableTransitSelection();
                   audio.playClick();
+                  if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        if (onSetTransitPin) {
+                          onSetTransitPin({ lat, lng });
+                        }
+                      },
+                      (error) => {
+                        // Fallback to player's room coordinate if GPS browser block
+                        const me = (room.players || []).find((p) => p.name === userName);
+                        if (me && me.lat && me.lng) {
+                          if (onSetTransitPin) {
+                            onSetTransitPin({ lat: me.lat, lng: me.lng });
+                          }
+                        } else {
+                          alert("Unable to acquire GPS coordinates automatically. Please make sure Location Services are enabled.");
+                        }
+                      },
+                      { enableHighAccuracy: true, timeout: 5000 }
+                    );
+                  } else {
+                    const me = (room.players || []).find((p) => p.name === userName);
+                    if (me && me.lat && me.lng) {
+                      if (onSetTransitPin) {
+                        onSetTransitPin({ lat: me.lat, lng: me.lng });
+                      }
+                    } else {
+                      alert("Geolocation is not supported by your browser.");
+                    }
+                  }
                 }}
-                className="w-full py-2.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-all"
+                className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow-md"
               >
-                📍 Select Transit Station on Map
+                📍 Drop Hiding Zone at Current Location
               </button>
             )}
 

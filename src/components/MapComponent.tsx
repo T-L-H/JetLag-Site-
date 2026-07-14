@@ -143,6 +143,12 @@ export default function MapComponent({
   const layerGroupRef = useRef<any>(null);
 
   const [lockOnMe, setLockOnMe] = useState(true);
+  const [autoFollowActive, setAutoFollowActive] = useState(true);
+
+  // Re-enable auto-follow whenever the active question or active thermometer seeker name changes
+  useEffect(() => {
+    setAutoFollowActive(true);
+  }, [room.activeQuestion?.id, room.activeThermometer?.seekerName]);
 
   // Initialize Map
   useEffect(() => {
@@ -169,10 +175,14 @@ export default function MapComponent({
     mapRef.current = map;
     layerGroupRef.current = L.layerGroup().addTo(map);
 
-    // Turn off auto-centering lock if the user manually drags the map
-    map.on('dragstart', () => {
+    // Turn off auto-centering lock and auto-follow if the user manually interacts with the map
+    const disableAutoFollow = () => {
       setLockOnMe(false);
-    });
+      setAutoFollowActive(false);
+    };
+
+    map.on('dragstart', disableAutoFollow);
+    map.on('zoomstart', disableAutoFollow);
 
     // Setup interactive pin drop listener on click
     map.on('click', (e: any) => {
@@ -249,7 +259,7 @@ export default function MapComponent({
   // Zoom and auto-follow active thermometer or question pin location
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !autoFollowActive) return;
 
     if (room.activeThermometer) {
       const activeSeeker = (room.players || []).find((p) => p.name === room.activeThermometer?.seekerName);
@@ -277,6 +287,7 @@ export default function MapComponent({
       return;
     }
   }, [
+    autoFollowActive,
     room.activeThermometer?.seekerName,
     (room.players || []).find((p) => p.name === room.activeThermometer?.seekerName)?.lat,
     (room.players || []).find((p) => p.name === room.activeThermometer?.seekerName)?.lng,
@@ -694,7 +705,7 @@ export default function MapComponent({
     // Only show the transit drop pin and zone to the Hider team so seekers don't know the exact zone center!
     const transitPinToDraw = isHiderTeam ? (transitPin || room.hidingStationPin) : null;
     if (transitPinToDraw) {
-      const radiusMeters = room.gameSize === 'L' ? 800 : 400; // Small/Medium: 400m; Large: 800m
+      const radiusMeters = room.gameSize === 'L' ? 804.67 : 402.33; // 1/2 mile for Large, 1/4 mile for Small/Medium
       L.circle([transitPinToDraw.lat, transitPinToDraw.lng], {
         radius: radiusMeters,
         color: '#ec4899', // Pink
@@ -703,7 +714,7 @@ export default function MapComponent({
         fillOpacity: 0.15,
         dashArray: '3, 6',
       })
-        .bindPopup(`<b>Mandatory Hiding Zone</b><br/>Radius: ${radiusMeters}m around transit drop station`)
+        .bindPopup(`<b>Mandatory Hiding Zone</b><br/>Radius: ${room.gameSize === 'L' ? '1/2' : '1/4'} mile around transit drop station`)
         .addTo(layers);
 
       // Star icon or pin marker at the transit center

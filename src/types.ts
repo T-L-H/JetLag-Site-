@@ -146,4 +146,6 @@ export interface RoomState {
   drawnCurseIds?: string[];
   lastHidingScoreDetails?: HidingScoreDetails | null;
   maxHandSize?: number;
+  hiderLeftZone?: boolean;
+  hiderLeftZoneAlertDismissedBySeeker?: boolean;
 }

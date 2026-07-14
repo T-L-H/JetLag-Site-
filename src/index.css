@@ -1,1 +1,23 @@
 @import "tailwindcss";
+
+@theme {
+  /* Rich Deep Jet Lag Navy background scale */
+  --color-slate-950: #0a1120;
+  --color-slate-900: #0f1a30;
+  --color-slate-850: #172645;
+  --color-slate-800: #1e3056;
+  --color-slate-700: #29406e;
+  
+  /* Bright Neon Jet Lag Orange for primary highlight accent */
+  --color-cyan-400: #ff6a00;
+  --color-cyan-300: #ff8833;
+  --color-cyan-500: #e65000;
+  --color-cyan-200: #ffb88a;
+  --color-cyan-950: #220900;
+  --color-cyan-900: #3b1100;
+  
+  /* Beautiful Warm Yellow for secondary details */
+  --color-amber-400: #fbbf24;
+  --color-amber-300: #fcd34d;
+  --color-amber-500: #f59e0b;
+}
