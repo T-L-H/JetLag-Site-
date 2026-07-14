@@ -618,37 +618,14 @@ export default function HiderView({
                 <button
                   onClick={() => {
                     audio.playClick();
-                    if (navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                          const lat = position.coords.latitude;
-                          const lng = position.coords.longitude;
-                          if (onSetTransitPin) {
-                            onSetTransitPin({ lat, lng });
-                          }
-                        },
-                        (error) => {
-                          // Fallback to player's room coordinate if GPS browser block
-                          const me = (room.players || []).find((p) => p.name === userName);
-                          if (me && me.lat && me.lng) {
-                            if (onSetTransitPin) {
-                              onSetTransitPin({ lat: me.lat, lng: me.lng });
-                            }
-                          } else {
-                            alert("Unable to acquire GPS coordinates automatically. Please make sure Location Services are enabled or drop a pin manually on the map.");
-                          }
-                        },
-                        { enableHighAccuracy: true, timeout: 5000 }
-                      );
-                    } else {
-                      const me = (room.players || []).find((p) => p.name === userName);
-                      if (me && me.lat && me.lng) {
-                        if (onSetTransitPin) {
-                          onSetTransitPin({ lat: me.lat, lng: me.lng });
-                        }
-                      } else {
-                        alert("Geolocation is not supported by your browser. Please drop a pin manually on the map.");
-                      }
+                    // Instantly use the hider's exact coordinates synced from the game state!
+                    const me = (room.players || []).find((p) => p.name === userName);
+                    const hiderTeam = room.teams[room.hiderTeamIndex];
+                    const lat = me?.lat || hiderTeam?.lat || room.centerLat;
+                    const lng = me?.lng || hiderTeam?.lng || room.centerLng;
+
+                    if (onSetTransitPin) {
+                      onSetTransitPin({ lat, lng });
                     }
                   }}
                   className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer"
