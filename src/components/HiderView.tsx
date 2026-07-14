@@ -614,46 +614,57 @@ export default function HiderView({
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => {
-                  audio.playClick();
-                  if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                      (position) => {
-                        const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        if (onSetTransitPin) {
-                          onSetTransitPin({ lat, lng });
-                        }
-                      },
-                      (error) => {
-                        // Fallback to player's room coordinate if GPS browser block
-                        const me = (room.players || []).find((p) => p.name === userName);
-                        if (me && me.lat && me.lng) {
+              <div className="space-y-2 w-full">
+                <button
+                  onClick={() => {
+                    audio.playClick();
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                          const lat = position.coords.latitude;
+                          const lng = position.coords.longitude;
                           if (onSetTransitPin) {
-                            onSetTransitPin({ lat: me.lat, lng: me.lng });
+                            onSetTransitPin({ lat, lng });
                           }
-                        } else {
-                          alert("Unable to acquire GPS coordinates automatically. Please make sure Location Services are enabled.");
-                        }
-                      },
-                      { enableHighAccuracy: true, timeout: 5000 }
-                    );
-                  } else {
-                    const me = (room.players || []).find((p) => p.name === userName);
-                    if (me && me.lat && me.lng) {
-                      if (onSetTransitPin) {
-                        onSetTransitPin({ lat: me.lat, lng: me.lng });
-                      }
+                        },
+                        (error) => {
+                          // Fallback to player's room coordinate if GPS browser block
+                          const me = (room.players || []).find((p) => p.name === userName);
+                          if (me && me.lat && me.lng) {
+                            if (onSetTransitPin) {
+                              onSetTransitPin({ lat: me.lat, lng: me.lng });
+                            }
+                          } else {
+                            alert("Unable to acquire GPS coordinates automatically. Please make sure Location Services are enabled or drop a pin manually on the map.");
+                          }
+                        },
+                        { enableHighAccuracy: true, timeout: 5000 }
+                      );
                     } else {
-                      alert("Geolocation is not supported by your browser.");
+                      const me = (room.players || []).find((p) => p.name === userName);
+                      if (me && me.lat && me.lng) {
+                        if (onSetTransitPin) {
+                          onSetTransitPin({ lat: me.lat, lng: me.lng });
+                        }
+                      } else {
+                        alert("Geolocation is not supported by your browser. Please drop a pin manually on the map.");
+                      }
                     }
-                  }
-                }}
-                className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow-md"
-              >
-                📍 Drop Hiding Zone at Current Location
-              </button>
+                  }}
+                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer"
+                >
+                  <span>📍 Drop Hiding Zone at Current Location</span>
+                </button>
+                <button
+                  onClick={() => {
+                    audio.playClick();
+                    enableTransitSelection();
+                  }}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-cyan-400 hover:text-cyan-300 text-xs font-black rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer"
+                >
+                  <span>🗺️ Drop Station Pin on Map Manually</span>
+                </button>
+              </div>
             )}
 
             {transitPin && !room.hidingStationPin && (

@@ -812,6 +812,7 @@ export default function App() {
                   enableTransitSelection={() => setSelectionMode('TRANSIT_PIN')}
                   transitPin={transitPin}
                   onPickDraft={handlePickDraft}
+                  onSetTransitPin={setTransitPin}
                 />
               ) : (
                 <SeekerView
