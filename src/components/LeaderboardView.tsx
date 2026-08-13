@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RoomState } from '../types';
-import { Trophy, RefreshCw, Sparkles, ShieldAlert, CheckCircle, Flame, ArrowRight, Award, BookmarkCheck } from 'lucide-react';
+import { Trophy, RefreshCw, Sparkles, ShieldAlert, CheckCircle, Flame, ArrowRight, Award, BookmarkCheck, Crown } from 'lucide-react';
 import audio from '../lib/audio';
 
 interface LeaderboardViewProps {
@@ -9,6 +9,7 @@ interface LeaderboardViewProps {
   onResetGame: () => void;
   isGM: boolean;
   onOpenSaveGame?: () => void;
+  onClaimGM?: () => void;
 }
 
 export default function LeaderboardView({
@@ -17,6 +18,7 @@ export default function LeaderboardView({
   onResetGame,
   isGM,
   onOpenSaveGame,
+  onClaimGM,
 }: LeaderboardViewProps) {
   const [playerReady, setPlayerReady] = useState(false);
   const [winnerDismissed, setWinnerDismissed] = useState(false);
@@ -167,33 +169,59 @@ export default function LeaderboardView({
               </button>
             )}
 
-            {!playerReady ? (
-              <button
-                onClick={() => {
-                  setPlayerReady(true);
-                  audio.playSuccess();
-                }}
-                className="w-full py-3 bg-slate-950 hover:bg-slate-900 text-cyan-400 hover:text-cyan-300 border border-slate-800 text-xs font-black rounded-xl transition-all shadow cursor-pointer"
-              >
-                {nextHiderTeam ? "Ready to start next round? -> YES" : "Ready to view final results? -> YES"}
-              </button>
-            ) : (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-center text-xs text-emerald-400 font-bold">
-                ✓ Ready verified! Waiting for Game Master to launch.
+            {isGM ? (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-[11px] font-bold">
+                  <span className="flex items-center space-x-1.5">
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <span>You are the Game Master (GM)</span>
+                  </span>
+                  <span className="text-[9px] uppercase tracking-wider text-amber-400/80">Authorized</span>
+                </div>
+                <button
+                  onClick={() => {
+                    onNextRound();
+                    audio.playSuccess();
+                  }}
+                  className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-indigo-500 hover:from-amber-400 hover:to-indigo-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-950/30 cursor-pointer transition-transform hover:scale-[1.01] flex items-center justify-center space-x-2"
+                >
+                  <Crown className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                  <span>{nextHiderTeam ? "GM: Launch Next Round" : "GM: Crown Champion & View Results"}</span>
+                  <ArrowRight className="w-4 h-4 text-slate-950 ml-1" />
+                </button>
               </div>
-            )}
+            ) : (
+              <div className="space-y-2 pt-1">
+                {!playerReady ? (
+                  <button
+                    onClick={() => {
+                      setPlayerReady(true);
+                      audio.playSuccess();
+                    }}
+                    className="w-full py-3 bg-slate-950 hover:bg-slate-900 text-cyan-400 hover:text-cyan-300 border border-slate-800 text-xs font-black rounded-xl transition-all shadow cursor-pointer"
+                  >
+                    {nextHiderTeam ? "Ready to start next round? -> YES" : "Ready to view final results? -> YES"}
+                  </button>
+                ) : (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 p-3 rounded-xl text-center text-xs text-emerald-400 font-bold">
+                    ✓ Ready verified! Waiting for Game Master to launch next round.
+                  </div>
+                )}
 
-            {isGM && (
-              <button
-                onClick={() => {
-                  onNextRound();
-                  audio.playSuccess();
-                }}
-                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-indigo-500 hover:from-cyan-400 hover:to-indigo-400 text-slate-950 font-black text-xs rounded-xl shadow cursor-pointer transition-transform hover:scale-[1.01]"
-              >
-                <span>{nextHiderTeam ? "GM: Launch Next Round" : "GM: Crown Champion & View Results"}</span>
-                <ArrowRight className="w-4 h-4 inline-block ml-1" />
-              </button>
+                {onClaimGM && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClaimGM();
+                      audio.playSuccess();
+                    }}
+                    className="w-full py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/40 text-amber-300 text-[11px] font-bold rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Claim Game Master Controls on this Device</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

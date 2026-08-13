@@ -7,7 +7,8 @@ import MapComponent from './components/MapComponent';
 import LeaderboardView from './components/LeaderboardView';
 import SaveGameModal from './components/SaveGameModal';
 import LoadGameModal from './components/LoadGameModal';
-import { Globe, Shield, RefreshCw, Compass, MapPin, Sliders, Volume2, VolumeX, Eye, EyeOff, Info, Sparkles, Radio, HelpCircle, CheckCircle, AlertTriangle, Check, BookmarkCheck, FolderDown } from 'lucide-react';
+import PlayerSwitcherModal from './components/PlayerSwitcherModal';
+import { Globe, Shield, RefreshCw, Compass, MapPin, Sliders, Volume2, VolumeX, Eye, EyeOff, Info, Sparkles, Radio, HelpCircle, CheckCircle, AlertTriangle, Check, BookmarkCheck, FolderDown, Crown, UserCheck } from 'lucide-react';
 import audio from './lib/audio';
 import { safeStorage } from './lib/storage';
 import { createSaveData, saveToLocalStorage } from './lib/saveGame';
@@ -20,9 +21,10 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(() => !audio.getMuted());
   const [showMobileControls, setShowMobileControls] = useState(true);
 
-  // Modal states for Save/Load
+  // Modal states for Save/Load/Player Switcher
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
+  const [showPlayerSwitcherModal, setShowPlayerSwitcherModal] = useState(false);
 
   // Active game states
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -715,11 +717,29 @@ export default function App() {
               </span>
             </div>
 
-            <div className="hidden sm:block text-right">
-              <span className="text-[9px] uppercase font-bold text-slate-500">My Team</span>
-              <span className={`block text-xs font-black ${isHider ? 'text-rose-400' : 'text-blue-400'}`}>
-                {currentTeam?.name} ({currentTeam?.role})
-              </span>
+            {/* Clickable Team / Player / GM Identity pill */}
+            <div
+              onClick={() => {
+                setShowPlayerSwitcherModal(true);
+                audio.playClick();
+              }}
+              className="flex items-center space-x-2 bg-slate-950/80 hover:bg-slate-900 border border-slate-850 hover:border-slate-700 px-2.5 py-1 rounded-xl cursor-pointer transition-all shadow-sm group"
+              title="Click to switch active player, change team, or toggle Game Master status"
+            >
+              <div className="text-right">
+                <div className="flex items-center justify-end space-x-1">
+                  {isGM && <Crown className="w-3 h-3 text-amber-400 shrink-0" />}
+                  <span className="text-[8px] md:text-[9px] uppercase font-bold text-slate-400 group-hover:text-slate-300 transition-colors">
+                    {userName || 'Spectator'} {isGM ? '(GM)' : ''}
+                  </span>
+                </div>
+                <span className={`block text-[10px] md:text-xs font-black leading-tight ${isHider ? 'text-rose-400' : 'text-blue-400'}`}>
+                  {currentTeam?.name || 'Spectating'} ({currentTeam?.role || 'VIEWER'})
+                </span>
+              </div>
+              <div className="p-1 bg-slate-900 group-hover:bg-slate-800 rounded-lg text-slate-400 group-hover:text-slate-200 transition-colors">
+                <UserCheck className="w-3.5 h-3.5" />
+              </div>
             </div>
           </div>
         )}
@@ -855,6 +875,10 @@ export default function App() {
                   onNextRound={handleNextRound}
                   onResetGame={handleResetGame}
                   isGM={isGM}
+                  onClaimGM={() => {
+                    setIsGM(true);
+                    safeStorage.setItem('jt_is_gm', 'true');
+                  }}
                   onOpenSaveGame={() => setShowSaveModal(true)}
                 />
               ) : isHider ? (
@@ -1103,13 +1127,63 @@ export default function App() {
       {/* Load Game Modal */}
       {showLoadModal && (
         <LoadGameModal
+          currentUserName={userName}
           onClose={() => setShowLoadModal(false)}
-          onGameLoaded={(loadedRoom) => {
+          onGameLoaded={async (loadedRoom, chosenPlayerName, chosenTeamName) => {
+            // Set person who loaded the game as Game Master
+            setIsGM(true);
+            safeStorage.setItem('jt_is_gm', 'true');
+
             setRoom(loadedRoom);
             setRoomCode(loadedRoom.code);
-            // If user not in room players or username blank, assign first player or GM
-            if (!userName && loadedRoom.players.length > 0) {
-              setUserName(loadedRoom.players[0].name);
+            safeStorage.setItem('jt_room_code', loadedRoom.code.toUpperCase());
+
+            const playerNameToUse =
+              chosenPlayerName ||
+              userName ||
+              (loadedRoom.players.length > 0 ? loadedRoom.players[0].name : 'GameMaster');
+
+            setUserName(playerNameToUse);
+            safeStorage.setItem('jt_username', playerNameToUse);
+
+            // Sync with backend to ensure player is assigned to the chosen team
+            if (chosenTeamName) {
+              try {
+                await fetch(`/api/rooms/${loadedRoom.code}/join`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ playerName: playerNameToUse, teamName: chosenTeamName }),
+                });
+              } catch (e) {
+                console.error('Failed to sync player identity on load:', e);
+              }
+            }
+          }}
+        />
+      )}
+
+      {/* In-Game Player & Role Switcher Modal */}
+      {showPlayerSwitcherModal && room && (
+        <PlayerSwitcherModal
+          room={room}
+          currentUserName={userName}
+          isGM={isGM}
+          onClose={() => setShowPlayerSwitcherModal(false)}
+          onToggleGM={(newGMState) => {
+            setIsGM(newGMState);
+            safeStorage.setItem('jt_is_gm', String(newGMState));
+          }}
+          onSelectPlayer={async (newPlayerName, newTeamName) => {
+            setUserName(newPlayerName);
+            safeStorage.setItem('jt_username', newPlayerName);
+            try {
+              await fetch(`/api/rooms/${room.code}/join`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerName: newPlayerName, teamName: newTeamName }),
+              });
+            } catch (e) {
+              console.error('Failed to update player on switch:', e);
             }
           }}
         />

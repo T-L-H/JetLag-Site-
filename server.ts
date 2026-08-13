@@ -404,22 +404,39 @@ app.post('/api/rooms/:code/join', (req, res) => {
   const initialLng = (typeof lng === 'number') ? lng : room.centerLng;
   const gpsAcquired = (typeof lat === 'number' && typeof lng === 'number');
 
-  // Create player
-  const playerId = `player_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-  const player: Player = {
-    id: playerId,
-    name: playerName,
-    team: teamName,
-    lat: initialLat,
-    lng: initialLng,
-    lastUpdate: Date.now(),
-    gpsAcquired,
-  };
+  // Create or update player
+  let player = room.players.find((p) => p.name.toLowerCase() === playerName.toLowerCase());
+  if (player) {
+    player.name = playerName;
+    player.team = teamName;
+    if (gpsAcquired) {
+      player.lat = initialLat;
+      player.lng = initialLng;
+      player.gpsAcquired = true;
+    }
+    player.lastUpdate = Date.now();
+  } else {
+    const playerId = `player_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    player = {
+      id: playerId,
+      name: playerName,
+      team: teamName,
+      lat: initialLat,
+      lng: initialLng,
+      lastUpdate: Date.now(),
+      gpsAcquired,
+    };
+    room.players.push(player);
+  }
 
-  // Add player
-  room.players.push(player);
+  // Remove player from other teams' player lists
+  room.teams.forEach((t) => {
+    if (t.name !== teamName) {
+      t.players = t.players.filter((p) => p.toLowerCase() !== playerName.toLowerCase());
+    }
+  });
 
-  // Manage team membership
+  // Manage target team membership
   let team = room.teams.find((t) => t.name === teamName);
   if (!team) {
     team = {
@@ -434,7 +451,7 @@ app.post('/api/rooms/:code/join', (req, res) => {
     };
     room.teams.push(team);
   } else {
-    if (!team.players.includes(playerName)) {
+    if (!team.players.some((p) => p.toLowerCase() === playerName.toLowerCase())) {
       team.players.push(playerName);
     }
     if (!team.lat || !team.lng || (team.lat === room.centerLat && team.lng === room.centerLng)) {
