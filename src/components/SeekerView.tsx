@@ -317,10 +317,10 @@ export default function SeekerView({
     const seekerLat = seeker?.lat || room.centerLat;
     const seekerLng = seeker?.lng || room.centerLng;
 
-    // Geographic query types MUST have custom station pin specified
-    if (['MATCHING', 'MEASURING', 'RADAR', 'TENTACLES'].includes(qType || '')) {
+    // Geographic query types validation
+    if (qType === 'MEASURING') {
       if (!customPin) {
-        alert('Please drop your station pin (Custom Target Pin) on the map first.');
+        alert('Please drop a Custom Target Pin on the map first.');
         return;
       }
     }
@@ -334,12 +334,11 @@ export default function SeekerView({
       }
       proposed = {
         type: 'MATCHING',
-        title: `Is your nearest "${matchingPoi}" landmark the same as my station's nearest "${matchingPoi}"?`,
+        title: `Is your nearest "${matchingPoi}" landmark the same as my nearest "${matchingPoi}"?`,
         rewardDesc: 'Draw 3, Pick 1',
         rewardDraw: 3,
         rewardPick: 1,
         poiType: matchingPoi,
-        customPin,
       };
     } else if (qType === 'MEASURING') {
       if (isPinVetoed(customPin!.lat, customPin!.lng, room.vetoedTypes)) {
@@ -348,7 +347,7 @@ export default function SeekerView({
       }
       proposed = {
         type: 'MEASURING',
-        title: `Compared to my station, are you closer to or further from the custom pin at [${customPin!.lat.toFixed(4)}, ${customPin!.lng.toFixed(4)}]?`,
+        title: `Compared to my location, are you closer to or further from the custom pin at [${customPin!.lat.toFixed(4)}, ${customPin!.lng.toFixed(4)}]?`,
         rewardDesc: 'Draw 3, Pick 1',
         rewardDraw: 3,
         rewardPick: 1,
@@ -381,12 +380,11 @@ export default function SeekerView({
       }
       proposed = {
         type: 'RADAR',
-        title: `Are you within a ${radarDistance} mi radius of my station?`,
+        title: `Are you within a ${radarDistance} mi radius of my current position?`,
         rewardDesc: 'Draw 2, Pick 1',
         rewardDraw: 2,
         rewardPick: 1,
         distanceValue: radarDistance,
-        customPin,
       };
     } else if (qType === 'TENTACLES') {
       if (room.vetoedTypes.includes(`TENTACLES:POI:${tentaclePoi}`)) {
@@ -395,13 +393,12 @@ export default function SeekerView({
       }
       proposed = {
         type: 'TENTACLES',
-        title: `Of all "${tentaclePoi}" within a ${tentacleDistance} mi radius of my station, which are you closest to?`,
+        title: `Of all "${tentaclePoi}" within a ${tentacleDistance} mi radius of my current position, which are you closest to?`,
         rewardDesc: 'Draw 4, Pick 2',
         rewardDraw: 4,
         rewardPick: 2,
         poiType: tentaclePoi,
         distanceValue: tentacleDistance,
-        customPin,
       };
     } else {
       // PHOTO
@@ -919,11 +916,11 @@ export default function SeekerView({
                 </div>
               )}
 
-              {/* GEOGRAPHIC TARGET STATION SETTINGS FOR ALL GEO QUESTIONS */}
-              {qType && ['MATCHING', 'MEASURING', 'RADAR', 'TENTACLES'].includes(qType) && (
+              {/* GEOGRAPHIC TARGET STATION SETTINGS ONLY FOR MEASURING QUESTIONS */}
+              {qType === 'MEASURING' && (
                 <div className="space-y-3 bg-slate-900/40 p-2.5 rounded-xl border border-slate-850">
                   <div>
-                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Search & Drop Station Pin (Required)</label>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Search & Drop Target Pin (Required)</label>
                     <div className="flex items-center space-x-1.5">
                       <input
                         type="text"
@@ -983,7 +980,7 @@ export default function SeekerView({
                     {customPin ? (
                       <div className="flex justify-between items-center text-[10px]">
                         <div>
-                          <span className="font-bold uppercase tracking-wider block text-[8px] text-cyan-400">Station Pin Registered</span>
+                          <span className="font-bold uppercase tracking-wider block text-[8px] text-cyan-400">Target Pin Registered</span>
                           <span className="font-mono mt-0.5 block text-[9px] text-slate-300">Lat: {customPin.lat.toFixed(4)} • Lng: {customPin.lng.toFixed(4)}</span>
                         </div>
                         <button onClick={clearCustomPin} className="text-red-400 hover:text-red-200 text-[10px] font-bold">Clear</button>
@@ -1001,7 +998,7 @@ export default function SeekerView({
                       className="w-full py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-cyan-400 hover:text-cyan-300 rounded-xl text-[10px] font-black transition-all flex items-center justify-center space-x-1 shadow-md"
                     >
                       <MapPin className="w-3 h-3 text-cyan-400 animate-pulse" />
-                      <span>Drop Station Pin on Map</span>
+                      <span>Drop Target Pin on Map</span>
                     </button>
                   </div>
                 </div>
@@ -1581,10 +1578,10 @@ export default function SeekerView({
                   </div>
                 )}
 
-                {/* GEOGRAPHIC TARGET STATION SETTINGS FOR ALL GEO QUESTIONS */}
-                {qType && ['MATCHING', 'MEASURING', 'RADAR', 'TENTACLES'].includes(qType) && (
+                {/* GEOGRAPHIC TARGET STATION SETTINGS ONLY FOR MEASURING QUESTIONS */}
+                {qType === 'MEASURING' && (
                   <div className="space-y-3 text-left bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase">Search & Drop Station Pin (Required)</span>
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase">Search & Drop Target Pin (Required)</span>
                     <div className="relative">
                       <div className="flex space-x-2">
                         <input
@@ -1651,7 +1648,7 @@ export default function SeekerView({
                         className="w-full py-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-cyan-400 hover:text-cyan-300 rounded-xl text-xs font-black transition-all flex items-center justify-center space-x-1.5 shadow-md"
                       >
                         <MapPin className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                        <span>Drop Station Pin on Map</span>
+                        <span>Drop Target Pin on Map</span>
                       </button>
                     </div>
 
@@ -1669,13 +1666,13 @@ export default function SeekerView({
                     {customPin ? (
                       <div className="bg-cyan-500/10 border border-cyan-500/20 p-3 rounded-xl flex items-center justify-between text-xs text-cyan-300">
                         <div>
-                          <span className="font-bold uppercase tracking-wider block text-[9px] text-cyan-400">Station Pin Registered</span>
+                          <span className="font-bold uppercase tracking-wider block text-[9px] text-cyan-400">Target Pin Registered</span>
                           <span className="font-mono mt-1 block">Lat: {customPin.lat.toFixed(4)} • Lng: {customPin.lng.toFixed(4)}</span>
                         </div>
                         <button onClick={clearCustomPin} className="text-red-400 hover:text-red-200 text-[10px] font-bold">Clear</button>
                       </div>
                     ) : (
-                      <p className="text-[10px] text-slate-500 italic">Enter an address or landmark name above to locate the station pin on the map.</p>
+                      <p className="text-[10px] text-slate-500 italic">Enter an address or landmark name above to locate the target pin on the map.</p>
                     )}
                   </div>
                 )}
