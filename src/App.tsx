@@ -5,9 +5,12 @@ import HiderView from './components/HiderView';
 import SeekerView from './components/SeekerView';
 import MapComponent from './components/MapComponent';
 import LeaderboardView from './components/LeaderboardView';
-import { Globe, Shield, RefreshCw, Compass, MapPin, Sliders, Volume2, VolumeX, Eye, EyeOff, Info, Sparkles, Radio, HelpCircle, CheckCircle, AlertTriangle, Check } from 'lucide-react';
+import SaveGameModal from './components/SaveGameModal';
+import LoadGameModal from './components/LoadGameModal';
+import { Globe, Shield, RefreshCw, Compass, MapPin, Sliders, Volume2, VolumeX, Eye, EyeOff, Info, Sparkles, Radio, HelpCircle, CheckCircle, AlertTriangle, Check, BookmarkCheck, FolderDown } from 'lucide-react';
 import audio from './lib/audio';
 import { safeStorage } from './lib/storage';
+import { createSaveData, saveToLocalStorage } from './lib/saveGame';
 
 export default function App() {
   // Identity states
@@ -16,6 +19,10 @@ export default function App() {
   const [isGM, setIsGM] = useState<boolean>(() => safeStorage.getItem('jt_is_gm') === 'true');
   const [soundEnabled, setSoundEnabled] = useState(() => !audio.getMuted());
   const [showMobileControls, setShowMobileControls] = useState(true);
+
+  // Modal states for Save/Load
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
 
   // Active game states
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -55,6 +62,14 @@ export default function App() {
       safeStorage.removeItem('jt_room_code');
     }
   }, [roomCode]);
+
+  // --- CONTINUOUS LOCAL AUTOSAVE ---
+  useEffect(() => {
+    if (room && room.code && room.teams && room.teams.length > 0) {
+      const saveData = createSaveData(room);
+      saveToLocalStorage(saveData);
+    }
+  }, [room]);
 
   // --- SSE REAL-TIME CONNECTION ---
   useEffect(() => {
@@ -444,7 +459,20 @@ export default function App() {
 
   const handleClearQuestion = async () => {
     if (!roomCode) return;
-    await fetch(`/api/rooms/${roomCode}/clear-question`, { method: 'POST' });
+    // Optimistic clear so the modal/popup closes immediately
+    setRoom((prev) => (prev ? { ...prev, activeQuestion: null } : prev));
+    setPreviewingQuestion(null);
+    setQType(null);
+
+    try {
+      const res = await fetch(`/api/rooms/${roomCode}/clear-question`, { method: 'POST' });
+      if (res.ok) {
+        const updated = await res.json();
+        setRoom(updated);
+      }
+    } catch (e) {
+      console.error('Error clearing question on server:', e);
+    }
   };
 
   const handlePickDraft = async (cardIds: string[]) => {
@@ -704,6 +732,34 @@ export default function App() {
             </span>
           )}
 
+          {/* Quick Save Game Button */}
+          {room && (
+            <button
+              onClick={() => {
+                setShowSaveModal(true);
+                audio.playClick();
+              }}
+              className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+              title="Save & Backup Game to resume later"
+            >
+              <BookmarkCheck className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Save Game</span>
+            </button>
+          )}
+
+          {/* Quick Load Game Button */}
+          <button
+            onClick={() => {
+              setShowLoadModal(true);
+              audio.playClick();
+            }}
+            className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+            title="Load or Resume Saved Game"
+          >
+            <FolderDown className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Load Game</span>
+          </button>
+
           <button
             onClick={() => {
               const nextMuted = soundEnabled; // if currently soundEnabled, toggle means we mute
@@ -732,6 +788,8 @@ export default function App() {
               onStartGame={handleStartGame}
               userName={userName}
               isGM={isGM}
+              onOpenLoadGame={() => setShowLoadModal(true)}
+              onOpenSaveGame={() => setShowSaveModal(true)}
             />
           </div>
         ) : room.gamePhase === 'LOBBY' ? (
@@ -744,6 +802,8 @@ export default function App() {
               onStartGame={handleStartGame}
               userName={userName}
               isGM={isGM}
+              onOpenLoadGame={() => setShowLoadModal(true)}
+              onOpenSaveGame={() => setShowSaveModal(true)}
             />
           </div>
         ) : (
@@ -795,6 +855,7 @@ export default function App() {
                   onNextRound={handleNextRound}
                   onResetGame={handleResetGame}
                   isGM={isGM}
+                  onOpenSaveGame={() => setShowSaveModal(true)}
                 />
               ) : isHider ? (
                 <HiderView
@@ -1030,6 +1091,29 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* Save Game Modal */}
+      {showSaveModal && room && (
+        <SaveGameModal
+          room={room}
+          onClose={() => setShowSaveModal(false)}
+        />
+      )}
+
+      {/* Load Game Modal */}
+      {showLoadModal && (
+        <LoadGameModal
+          onClose={() => setShowLoadModal(false)}
+          onGameLoaded={(loadedRoom) => {
+            setRoom(loadedRoom);
+            setRoomCode(loadedRoom.code);
+            // If user not in room players or username blank, assign first player or GM
+            if (!userName && loadedRoom.players.length > 0) {
+              setUserName(loadedRoom.players[0].name);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

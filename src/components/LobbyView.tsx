@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameSize, RoomState } from '../types';
-import { Shield, Users, Radio, MapPin, Play, Plus, X, Globe, Copy, Check, Search, Compass, Navigation } from 'lucide-react';
+import { Shield, Users, Radio, MapPin, Play, Plus, X, Globe, Copy, Check, Search, Compass, Navigation, RotateCcw, BookmarkCheck, FolderDown } from 'lucide-react';
 import audio from '../lib/audio';
 import { getDistance } from '../lib/geo';
 
@@ -24,6 +24,8 @@ interface LobbyViewProps {
   onStartGame: () => void;
   userName: string;
   isGM: boolean;
+  onOpenLoadGame?: () => void;
+  onOpenSaveGame?: () => void;
 }
 
 const PRESET_LOCATIONS = [
@@ -49,6 +51,8 @@ export default function LobbyView({
   onStartGame,
   userName,
   isGM,
+  onOpenLoadGame,
+  onOpenSaveGame,
 }: LobbyViewProps) {
   // Create state
   const [size, setSize] = useState<GameSize>('M');
@@ -1110,6 +1114,31 @@ export default function LobbyView({
             </div>
           </div>
 
+          {/* Load Saved Game Card */}
+          <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-3xl p-5 shadow-2xl relative shrink-0">
+            <div className="flex items-center space-x-3 mb-3">
+              <div className="p-2 bg-emerald-500/10 rounded-2xl text-emerald-400">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-100 font-sans tracking-tight">Load & Resume Match</h2>
+                <p className="text-[10px] text-slate-400">Start round from saved file, code or auto-save</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenLoadGame) onOpenLoadGame();
+                audio.playClick();
+              }}
+              className="w-full py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/50 text-emerald-300 hover:text-emerald-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-2 shadow-md cursor-pointer group"
+            >
+              <FolderDown className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <span>Restore Match State (JSON / Code)</span>
+            </button>
+          </div>
+
           {/* Join Game Card */}
           <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-3xl p-6 shadow-2xl relative shrink-0">
             <div className="flex items-center space-x-3 mb-4">
@@ -1230,8 +1259,8 @@ export default function LobbyView({
 
   return (
   <div className="max-w-4xl mx-auto py-6 space-y-4">
-    {/* Leave / Discard Lobby Session */}
-    <div className="flex justify-start">
+    {/* Leave / Discard / Save Lobby Session */}
+    <div className="flex justify-between items-center flex-wrap gap-2">
       <button
         onClick={() => {
           if (confirm(isGM ? "Are you sure you want to discard this session and go back to setup?" : "Are you sure you want to leave this lobby?")) {
@@ -1243,6 +1272,17 @@ export default function LobbyView({
       >
         <X className="w-3.5 h-3.5 text-rose-500" />
         <span>{isGM ? "Discard Session & Start Over" : "Leave Lobby & Back to Setup"}</span>
+      </button>
+
+      <button
+        onClick={() => {
+          if (onOpenSaveGame) onOpenSaveGame();
+          audio.playClick();
+        }}
+        className="inline-flex items-center space-x-1.5 text-xs font-bold text-cyan-300 hover:text-cyan-200 transition-colors cursor-pointer bg-slate-950 border border-slate-850 hover:border-cyan-500/50 px-3.5 py-2 rounded-xl shadow-md"
+      >
+        <BookmarkCheck className="w-3.5 h-3.5 text-cyan-400" />
+        <span>Save / Backup Game State</span>
       </button>
     </div>
 

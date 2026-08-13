@@ -485,18 +485,61 @@ export default function HiderView({
     return () => clearInterval(interval);
   }, [catchPressed, onCatchHider]);
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.82): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onerror = () => resolve('');
+      reader.onload = (readerEvent) => {
+        const img = new window.Image();
+        img.onerror = () => resolve(readerEvent.target?.result as string || '');
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(readerEvent.target?.result as string || '');
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl);
+        };
+        img.src = (readerEvent.target?.result as string) || '';
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPhotoBase64(reader.result as string);
+    try {
+      const compressedDataUrl = await compressImage(file);
+      if (compressedDataUrl) {
+        setPhotoBase64(compressedDataUrl);
+        audio.playSuccess();
+      }
+    } catch (err) {
+      console.error('Error compressing photo:', err);
+    } finally {
       setUploading(false);
-      audio.playSuccess();
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleCastConfirm = (fulfilled: boolean) => {

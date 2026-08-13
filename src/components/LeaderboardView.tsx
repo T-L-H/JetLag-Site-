@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RoomState } from '../types';
-import { Trophy, RefreshCw, Sparkles, ShieldAlert, CheckCircle, Flame, ArrowRight, Award } from 'lucide-react';
+import { Trophy, RefreshCw, Sparkles, ShieldAlert, CheckCircle, Flame, ArrowRight, Award, BookmarkCheck } from 'lucide-react';
 import audio from '../lib/audio';
 
 interface LeaderboardViewProps {
@@ -8,6 +8,7 @@ interface LeaderboardViewProps {
   onNextRound: () => void;
   onResetGame: () => void;
   isGM: boolean;
+  onOpenSaveGame?: () => void;
 }
 
 export default function LeaderboardView({
@@ -15,6 +16,7 @@ export default function LeaderboardView({
   onNextRound,
   onResetGame,
   isGM,
+  onOpenSaveGame,
 }: LeaderboardViewProps) {
   const [playerReady, setPlayerReady] = useState(false);
   const [winnerDismissed, setWinnerDismissed] = useState(false);
@@ -152,6 +154,19 @@ export default function LeaderboardView({
 
           {/* Ready Check button */}
           <div className="pt-4 border-t border-slate-850/60 space-y-3">
+            {onOpenSaveGame && (
+              <button
+                onClick={() => {
+                  onOpenSaveGame();
+                  audio.playClick();
+                }}
+                className="w-full py-2.5 bg-slate-950 hover:bg-slate-900 text-cyan-300 hover:text-cyan-200 border border-slate-800 hover:border-cyan-500/40 text-xs font-bold rounded-xl transition-all shadow flex items-center justify-center space-x-1.5 cursor-pointer"
+              >
+                <BookmarkCheck className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Save & Backup Match State</span>
+              </button>
+            )}
+
             {!playerReady ? (
               <button
                 onClick={() => {
@@ -257,7 +272,20 @@ export default function LeaderboardView({
           })}
         </div>
 
-        <div className="pt-4 border-t border-slate-850/60 flex justify-center">
+        <div className="pt-4 border-t border-slate-850/60 flex flex-col gap-2.5">
+          {onOpenSaveGame && (
+            <button
+              onClick={() => {
+                onOpenSaveGame();
+                audio.playClick();
+              }}
+              className="w-full py-2.5 bg-slate-950 hover:bg-slate-900 text-cyan-300 hover:text-cyan-200 border border-slate-800 hover:border-cyan-500/40 text-xs font-bold rounded-xl transition-all shadow flex items-center justify-center space-x-1.5 cursor-pointer"
+            >
+              <BookmarkCheck className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Export & Save Final Standings</span>
+            </button>
+          )}
+
           {isGM && (
             <button
               onClick={() => {

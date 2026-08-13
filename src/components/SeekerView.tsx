@@ -622,13 +622,28 @@ export default function SeekerView({
     const isPhotoAnswer = room.activeQuestion.status === 'ANSWERED' && room.activeQuestion.photoUrl;
 
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-xl mx-auto py-5 md:py-6 space-y-3 md:space-y-4 text-center">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-xl mx-auto py-5 md:py-6 space-y-3 md:space-y-4 text-center relative">
+        {room.activeQuestion.status !== 'PENDING' && (
+          <button
+            onClick={() => {
+              setPreviewingQuestion(null);
+              setQType(null);
+              onClearQuestion();
+              audio.playClick();
+            }}
+            className="absolute top-4 right-4 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-all cursor-pointer"
+            title="Dismiss question outcome"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+
         <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400 w-fit mx-auto">
           <Radio className="w-6 h-6 animate-pulse" />
         </div>
 
         <div>
-          <span className="text-[10px] uppercase font-bold tracking-widest text-cyan-400">Question Pending Resolution</span>
+          <span className="text-[10px] uppercase font-bold tracking-widest text-cyan-400">Question Outcome & Resolution</span>
           <h3 className="text-base font-black text-slate-100 mt-1">{room.activeQuestion.title}</h3>
         </div>
 
@@ -680,6 +695,8 @@ export default function SeekerView({
 
             <button
               onClick={() => {
+                setPreviewingQuestion(null);
+                setQType(null);
                 onClearQuestion();
                 audio.playClick();
               }}
@@ -1310,12 +1327,26 @@ export default function SeekerView({
 
         {/* ACTIVE QUESTION OVERLAY FOR MOBILE */}
         {!hasCurse && hasActiveQuestion && (
-          <div className="absolute bottom-20 left-3 right-3 max-w-sm mx-auto bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1040] text-left animate-in fade-in slide-in-from-bottom-4 duration-200 font-sans">
+          <div className="absolute bottom-20 left-3 right-3 max-w-sm mx-auto bg-slate-950/90 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-4 shadow-2xl flex flex-col space-y-3 pointer-events-auto z-[1040] text-left animate-in fade-in slide-in-from-bottom-4 duration-200 font-sans">
             <div className="flex justify-between items-center pb-2 border-b border-slate-900 shrink-0">
               <div>
-                <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">PENDING RESOLUTION</span>
+                <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">QUESTION RESOLUTION</span>
                 <h4 className="text-xs font-black text-slate-100 uppercase mt-0.5 leading-normal">{room.activeQuestion.title}</h4>
               </div>
+              {room.activeQuestion.status !== 'PENDING' && (
+                <button
+                  onClick={() => {
+                    setPreviewingQuestion(null);
+                    setQType(null);
+                    onClearQuestion();
+                    audio.playClick();
+                  }}
+                  className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  title="Dismiss"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             <div className="max-h-56 overflow-y-auto pr-1 space-y-2.5 text-[10px]">
@@ -1377,6 +1408,8 @@ export default function SeekerView({
             {room.activeQuestion.status !== 'PENDING' && (
               <button
                 onClick={() => {
+                  setPreviewingQuestion(null);
+                  setQType(null);
                   onClearQuestion();
                   audio.playClick();
                 }}

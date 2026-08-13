@@ -149,3 +149,27 @@ export interface RoomState {
   hiderLeftZone?: boolean;
   hiderLeftZoneAlertDismissedBySeeker?: boolean;
 }
+
+export interface GameSaveData {
+  app: 'jet-tracker';
+  version: number;
+  saveDate: string; // ISO string
+  roomCode: string;
+  summary: {
+    gamePhase: GamePhase;
+    gameSize: GameSize;
+    currentHiderTeam: string;
+    elapsedSeconds: number;
+    roundNumber: number;
+    totalRounds: number;
+    leadingTeam: string;
+    teams: {
+      name: string;
+      role: string;
+      score: number;
+      scoreFormatted: string;
+      players: string[];
+    }[];
+  };
+  room: RoomState;
+}

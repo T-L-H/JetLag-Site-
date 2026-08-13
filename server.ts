@@ -16,13 +16,26 @@ app.use(express.json({ limit: '15mb' }));
 const rooms: Record<string, RoomState> = {};
 const clientsByRoom: Record<string, express.Response[]> = {};
 
+// Helper to safely lookup room regardless of casing
+function getRoom(code?: string): RoomState | undefined {
+  if (!code) return undefined;
+  return rooms[code.toUpperCase()] || rooms[code] || rooms[code.toLowerCase()];
+}
+
 // Helper to broadcast room updates to all connected players
 function broadcastRoom(code: string) {
-  const room = rooms[code];
+  const room = getRoom(code);
   if (!room) return;
-  const clients = clientsByRoom[code] || [];
+  const upper = code.toUpperCase();
+  const lower = code.toLowerCase();
+  
+  const clientSet = new Set<express.Response>();
+  (clientsByRoom[upper] || []).forEach(c => clientSet.add(c));
+  (clientsByRoom[code] || []).forEach(c => clientSet.add(c));
+  (clientsByRoom[lower] || []).forEach(c => clientSet.add(c));
+
   const message = `data: ${JSON.stringify(room)}\n\n`;
-  clients.forEach((client) => {
+  clientSet.forEach((client) => {
     try {
       client.write(message);
     } catch (e) {
@@ -264,10 +277,113 @@ app.post('/api/rooms', async (req, res) => {
   res.json(room);
 });
 
+// Import / Restore saved game
+app.post('/api/rooms/import', (req, res) => {
+  const { saveData } = req.body;
+  if (!saveData) {
+    return res.status(400).json({ error: 'Missing saveData in request payload.' });
+  }
+
+  let importedRoom: RoomState;
+  let saveDateStr = '';
+
+  if (saveData.app === 'jet-tracker' && saveData.room) {
+    importedRoom = saveData.room;
+    saveDateStr = saveData.saveDate || '';
+  } else if (saveData.code && saveData.teams && saveData.grid) {
+    importedRoom = saveData;
+  } else if (saveData.room && saveData.room.code) {
+    importedRoom = saveData.room;
+  } else {
+    return res.status(400).json({ error: 'Invalid save file format.' });
+  }
+
+  const code = (importedRoom.code || generateRoomCode()).toUpperCase();
+  importedRoom.code = code;
+
+  // Normalize timer if it was running during save
+  if (importedRoom.timerStart) {
+    const elapsed = Math.max(0, Math.floor((Date.now() - importedRoom.timerStart) / 1000));
+    importedRoom.timerAccumulated = (importedRoom.timerAccumulated || 0) + elapsed;
+    importedRoom.timerStart = null;
+  }
+
+  // Ensure mandatory arrays and structures exist
+  importedRoom.players = importedRoom.players || [];
+  importedRoom.teams = importedRoom.teams || [];
+  importedRoom.grid = importedRoom.grid || [];
+  importedRoom.history = importedRoom.history || [];
+  importedRoom.vetoedTypes = importedRoom.vetoedTypes || [];
+  importedRoom.activeCurses = importedRoom.activeCurses || [];
+  importedRoom.hiderHand = importedRoom.hiderHand || [];
+  importedRoom.drawnCurseIds = importedRoom.drawnCurseIds || [];
+
+  const topTeam = [...(importedRoom.teams || [])].sort((a, b) => b.score - a.score)[0];
+  const leaderInfo = topTeam && topTeam.score > 0 ? `${topTeam.name} (${Math.floor(topTeam.score / 60)}m)` : 'Tie / In Progress';
+
+  addHistoryLog(
+    importedRoom,
+    `Game state restored from saved file${saveDateStr ? ` (Created: ${new Date(saveDateStr).toLocaleString()})` : ''}. Phase: ${importedRoom.gamePhase}, Leader: ${leaderInfo}.`
+  );
+
+  rooms[code] = importedRoom;
+  broadcastRoom(code);
+
+  res.json({ ok: true, roomCode: code, room: importedRoom });
+});
+
+// Export / Backup game state
+app.get('/api/rooms/:code/export', (req, res) => {
+  const { code } = req.params;
+  const room = getRoom(code);
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  // Freeze running timer in export copy
+  const exportRoom: RoomState = JSON.parse(JSON.stringify(room));
+  if (exportRoom.timerStart) {
+    const elapsed = Math.max(0, Math.floor((Date.now() - exportRoom.timerStart) / 1000));
+    exportRoom.timerAccumulated = (exportRoom.timerAccumulated || 0) + elapsed;
+    exportRoom.timerStart = null;
+  }
+
+  const sortedTeams = [...(exportRoom.teams || [])].sort((a, b) => b.score - a.score);
+  const leadingTeam = sortedTeams.length > 0 && sortedTeams[0].score > 0 ? sortedTeams[0].name : 'In Progress';
+  const currentHiderTeam = exportRoom.teams?.[exportRoom.hiderTeamIndex]?.name || 'N/A';
+  const hiderSeqIndex = exportRoom.hiderSequence?.indexOf(exportRoom.hiderTeamIndex) ?? -1;
+
+  const savePayload = {
+    app: 'jet-tracker',
+    version: 1,
+    saveDate: new Date().toISOString(),
+    roomCode: exportRoom.code,
+    summary: {
+      gamePhase: exportRoom.gamePhase,
+      gameSize: exportRoom.gameSize,
+      currentHiderTeam,
+      elapsedSeconds: exportRoom.timerAccumulated,
+      roundNumber: hiderSeqIndex >= 0 ? hiderSeqIndex + 1 : 1,
+      totalRounds: exportRoom.hiderSequence?.length || exportRoom.teams?.length || 1,
+      leadingTeam,
+      teams: (exportRoom.teams || []).map((t) => ({
+        name: t.name,
+        role: t.role,
+        score: t.score,
+        scoreFormatted: `${Math.floor(t.score / 60)}m ${t.score % 60}s`,
+        players: t.players || [],
+      })),
+    },
+    room: exportRoom,
+  };
+
+  res.json(savePayload);
+});
+
 // Fetch Room details
 app.get('/api/rooms/:code', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code.toUpperCase()];
+  const room = getRoom(code);
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
   }
@@ -278,7 +394,7 @@ app.get('/api/rooms/:code', (req, res) => {
 app.post('/api/rooms/:code/join', (req, res) => {
   const { code } = req.params;
   const { playerName, teamName, lat, lng } = req.body;
-  const room = rooms[code.toUpperCase()];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -338,7 +454,7 @@ app.post('/api/rooms/:code/join', (req, res) => {
 app.post('/api/rooms/:code/update-location', (req, res) => {
   const { code } = req.params;
   const { playerName, lat, lng, accuracy } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -415,7 +531,7 @@ app.post('/api/rooms/:code/update-location', (req, res) => {
 // Dismiss Zone Alert for Seeker
 app.post('/api/rooms/:code/dismiss-zone-alert', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -430,7 +546,7 @@ app.post('/api/rooms/:code/dismiss-zone-alert', (req, res) => {
 // Start Game
 app.post('/api/rooms/:code/start-game', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -481,7 +597,7 @@ app.post('/api/rooms/:code/start-game', (req, res) => {
 // Start Hiding Timer
 app.post('/api/rooms/:code/start-hiding', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -502,7 +618,7 @@ app.post('/api/rooms/:code/start-hiding', (req, res) => {
 app.post('/api/rooms/:code/arrived-transit', (req, res) => {
   const { code } = req.params;
   const { lat, lng } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -536,7 +652,7 @@ app.post('/api/rooms/:code/arrived-transit', (req, res) => {
 // Hiding Complete -> Seeking Starts
 app.post('/api/rooms/:code/done-hiding', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -556,7 +672,7 @@ app.post('/api/rooms/:code/done-hiding', (req, res) => {
 app.post('/api/rooms/:code/start-thermometer', (req, res) => {
   const { code } = req.params;
   const { seekerName, startLat, startLng, distanceValue } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -578,7 +694,7 @@ app.post('/api/rooms/:code/start-thermometer', (req, res) => {
 // Reset Thermometer Tracking
 app.post('/api/rooms/:code/reset-thermometer', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -598,7 +714,7 @@ app.post('/api/rooms/:code/reset-thermometer', (req, res) => {
 app.post('/api/rooms/:code/propose-question', (req, res) => {
   const { code } = req.params;
   const { question } = req.body; // active question payload
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -680,7 +796,7 @@ app.post('/api/rooms/:code/propose-question', (req, res) => {
 app.post('/api/rooms/:code/answer-question', (req, res) => {
   const { code } = req.params;
   const { answerValue, photoUrl } = req.body; // boolean for YES/NO questions, or base64 photo
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -872,7 +988,7 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
 // Clear Active Question (Acknowledge and dismiss resolved question)
 app.post('/api/rooms/:code/clear-question', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -889,7 +1005,7 @@ app.post('/api/rooms/:code/clear-question', (req, res) => {
 app.post('/api/rooms/:code/pick-draft', (req, res) => {
   const { code } = req.params;
   const { cardIds } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -917,7 +1033,7 @@ app.post('/api/rooms/:code/pick-draft', (req, res) => {
 app.post('/api/rooms/:code/veto-question', (req, res) => {
   const { code } = req.params;
   const { cardId } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -974,7 +1090,7 @@ app.post('/api/rooms/:code/veto-question', (req, res) => {
 app.post('/api/rooms/:code/play-powerup', (req, res) => {
   const { code } = req.params;
   const { cardId, targetCardId } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -1053,7 +1169,7 @@ app.post('/api/rooms/:code/play-powerup', (req, res) => {
 app.post('/api/rooms/:code/cast-curse', (req, res) => {
   const { code } = req.params;
   const { cardId, fulfilledCost, discardCardIds } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -1165,7 +1281,7 @@ app.post('/api/rooms/:code/cast-curse', (req, res) => {
 app.post('/api/rooms/:code/claim-curse', (req, res) => {
   const { code } = req.params;
   const { curseId } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -1194,7 +1310,7 @@ app.post('/api/rooms/:code/claim-curse', (req, res) => {
 app.post('/api/rooms/:code/dismiss-curse', (req, res) => {
   const { code } = req.params;
   const { curseId, confirmed } = req.body;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -1230,7 +1346,7 @@ app.post('/api/rooms/:code/dismiss-curse', (req, res) => {
 // Catch Hider (Ends Round!)
 app.post('/api/rooms/:code/catch-hider', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -1287,7 +1403,7 @@ app.post('/api/rooms/:code/catch-hider', (req, res) => {
 // Start Next Round
 app.post('/api/rooms/:code/next-round', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -1348,7 +1464,7 @@ app.post('/api/rooms/:code/next-round', (req, res) => {
 // Reset Room
 app.post('/api/rooms/:code/reset', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -1381,7 +1497,7 @@ app.post('/api/rooms/:code/reset', (req, res) => {
 // SSE Streaming Room State
 app.get('/api/rooms/:code/stream', (req, res) => {
   const { code } = req.params;
-  const room = rooms[code];
+  const room = getRoom(code);
 
   if (!room) {
     return res.status(404).json({ error: 'Room not found' });
@@ -1393,10 +1509,11 @@ app.get('/api/rooms/:code/stream', (req, res) => {
     'Connection': 'keep-alive',
   });
 
-  if (!clientsByRoom[code]) {
-    clientsByRoom[code] = [];
+  const upper = code.toUpperCase();
+  if (!clientsByRoom[upper]) {
+    clientsByRoom[upper] = [];
   }
-  clientsByRoom[code].push(res);
+  clientsByRoom[upper].push(res);
 
   // Send initial state immediately
   res.write(`data: ${JSON.stringify(room)}\n\n`);
