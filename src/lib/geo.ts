@@ -103,45 +103,70 @@ export function generateGrid(
   return grid;
 }
 
-// 1. MATCHING: Voronoi tessellation logic
-// If YES: keep cells where Seeker's closest POI is the cell's closest POI
-// If NO: eliminate cells where Seeker's closest POI is the cell's closest POI
+// 1. MATCHING: Nearest-Neighbor / Voronoi territory logic
+// For any given coordinate X on the map:
+// Let P_seeker = The specific POI of that category closest to the Seeker.
+// Let P_other = Every other POI of that same category on the map.
+// If the Hider answered "YES": The Hider is inside the Seeker's POI territory. Keep only the map coordinates where distance(X, P_seeker) < distance(X, closest P_other). Eliminate everything else.
+// If the Hider answered "NO": The Hider is outside the Seeker's POI territory. Eliminate ONLY the map coordinates where distance(X, P_seeker) < distance(X, closest P_other). Keep the rest of the map intact.
 export function cutMatching(
   grid: GridCell[],
   pois: POI[],
   answerIsSame: boolean,
   seekerLat: number,
-  seekerLng: number
+  seekerLng: number,
+  poiCategory?: string
 ): GridCell[] {
-  if (pois.length === 0) return grid;
+  if (!pois || pois.length === 0) return grid;
 
-  // Find Seeker's closest POI
-  let seekerClosestPoi: POI = pois[0];
+  // Filter to the specific POI category if provided (case-insensitive)
+  const categoryPois = poiCategory
+    ? pois.filter((p) => p.type.toLowerCase() === poiCategory.toLowerCase())
+    : pois;
+
+  // If no POIs match the category, do not alter the grid
+  if (categoryPois.length === 0) return grid;
+
+  // 1. Find P_seeker: The specific POI closest to the Seeker
+  let P_seeker: POI = categoryPois[0];
   let minSeekerDist = Infinity;
-  for (const poi of pois) {
+  for (const poi of categoryPois) {
     const d = getDistance(seekerLat, seekerLng, poi.lat, poi.lng);
     if (d < minSeekerDist) {
       minSeekerDist = d;
-      seekerClosestPoi = poi;
+      P_seeker = poi;
     }
   }
 
+  // 2. Let P_other = Every other POI of that same category on the map
+  const otherPois = categoryPois.filter((p) => p.id !== P_seeker.id);
+
+  // If there are no other POIs of that category on the entire map
+  if (otherPois.length === 0) {
+    return answerIsSame ? grid : grid;
+  }
+
+  // 3. For any given coordinate X on the map, evaluate:
+  // Distance from X to P_seeker vs Distance from X to the closest P_other
   return grid.map((cell) => {
     if (!cell.active) return cell;
 
-    // Find cell's closest POI
-    let cellClosestPoi: POI = pois[0];
-    let minCellDist = Infinity;
-    for (const poi of pois) {
-      const d = getDistance(cell.lat, cell.lng, poi.lat, poi.lng);
-      if (d < minCellDist) {
-        minCellDist = d;
-        cellClosestPoi = poi;
+    const distToPSeeker = getDistance(cell.lat, cell.lng, P_seeker.lat, P_seeker.lng);
+
+    let minDistToOther = Infinity;
+    for (const other of otherPois) {
+      const d = getDistance(cell.lat, cell.lng, other.lat, other.lng);
+      if (d < minDistToOther) {
+        minDistToOther = d;
       }
     }
 
-    const isSamePoi = cellClosestPoi.id === seekerClosestPoi.id;
-    const shouldKeep = answerIsSame ? isSamePoi : !isSamePoi;
+    // Coordinate X is strictly inside P_seeker's territory if distance to P_seeker < distance to closest P_other
+    const isInsideSeekerTerritory = distToPSeeker < minDistToOther;
+
+    // YES: Keep only where distance(X, P_seeker) < minDistToOther. Eliminate everything else.
+    // NO: Eliminate ONLY where distance(X, P_seeker) < minDistToOther. Keep the rest intact.
+    const shouldKeep = answerIsSame ? isInsideSeekerTerritory : !isInsideSeekerTerritory;
 
     return {
       ...cell,

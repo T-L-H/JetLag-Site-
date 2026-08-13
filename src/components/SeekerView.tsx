@@ -919,7 +919,7 @@ export default function SeekerView({
                     </select>
                   </div>
                   <p className="text-[9px] text-slate-400 leading-normal">
-                    <b>Math:</b> Compares closest POIs of same type. Draws Voronoi dividing line.
+                    <b>Math:</b> Nearest-Neighbor / Voronoi territory. YES keeps Seeker's closest "{matchingPoi}" territory; NO eliminates only that territory.
                   </p>
                 </div>
               )}
@@ -1597,7 +1597,7 @@ export default function SeekerView({
                       </select>
                     </div>
                     <p className="text-[10px] text-slate-400 leading-normal">
-                      <b>Math:</b> Calculates if Seeker and Hider closest "{matchingPoi}" are the same cell. Slices grid in/out.
+                      <b>Math:</b> Nearest-Neighbor / Voronoi territory. YES keeps Seeker's closest "{matchingPoi}" territory; NO eliminates only that territory.
                     </p>
                   </div>
                 )}

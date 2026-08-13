@@ -843,9 +843,12 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
   // Execute Geospatial Cutting
   if (q.type === 'MATCHING') {
     const isYes = answerValue === true;
+    const targetCategory = q.poiType || '';
     const pois = room.pois && room.pois.length > 0 ? room.pois : generateDynamicPOIs(room.centerLat, room.centerLng, room.radiusMiles);
-    room.grid = cutMatching(room.grid, pois, isYes, seekerLat, seekerLng);
-    description = `Matching Question answered: ${isYes ? 'YES' : 'NO'}.`;
+    room.grid = cutMatching(room.grid, pois, isYes, seekerLat, seekerLng, targetCategory);
+    description = isYes
+      ? `Matching "${targetCategory}": YES. Kept Seeker's nearest ${targetCategory} territory; eliminated others.`
+      : `Matching "${targetCategory}": NO. Eliminated Seeker's nearest ${targetCategory} territory; kept the rest intact.`;
   } else if (q.type === 'MEASURING') {
     if (q.customPin) {
       room.grid = cutMeasuring(
