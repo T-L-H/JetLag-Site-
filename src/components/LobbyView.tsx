@@ -153,6 +153,41 @@ export default function LobbyView({
   const [hidingMinutes, setHidingMinutes] = useState(10);
 
   const [copied, setCopied] = useState(false);
+  const [kickConfirmPlayer, setKickConfirmPlayer] = useState<string | null>(null);
+
+  const handleSetTeamLead = async (teamName: string, playerName: string) => {
+    if (!room) return;
+    audio.playClick();
+    try {
+      await fetch(`/api/rooms/${room.code}/set-team-lead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamName, playerName }),
+      });
+    } catch (e) {
+      console.error('Failed to set team lead:', e);
+    }
+  };
+
+  const handleKickPlayer = async (playerName: string) => {
+    if (!room) return;
+    audio.playAlert();
+    try {
+      const res = await fetch(`/api/rooms/${room.code}/remove-player`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerName }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to remove player');
+      }
+    } catch (e) {
+      console.error('Failed to remove player:', e);
+    } finally {
+      setKickConfirmPlayer(null);
+    }
+  };
 
   // Sync GM name and team
   useEffect(() => {
@@ -1256,41 +1291,6 @@ export default function LobbyView({
 
   // 2. Waiting Lobby view (Active room state)
   const isGMAndLobbyOwner = isGM && room.players.length > 0;
-  const [kickConfirmPlayer, setKickConfirmPlayer] = useState<string | null>(null);
-
-  const handleSetTeamLead = async (teamName: string, playerName: string) => {
-    if (!room) return;
-    audio.playClick();
-    try {
-      await fetch(`/api/rooms/${room.code}/set-team-lead`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teamName, playerName }),
-      });
-    } catch (e) {
-      console.error('Failed to set team lead:', e);
-    }
-  };
-
-  const handleKickPlayer = async (playerName: string) => {
-    if (!room) return;
-    audio.playAlert();
-    try {
-      const res = await fetch(`/api/rooms/${room.code}/remove-player`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerName }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || 'Failed to remove player');
-      }
-    } catch (e) {
-      console.error('Failed to remove player:', e);
-    } finally {
-      setKickConfirmPlayer(null);
-    }
-  };
 
   return (
   <div className="max-w-4xl mx-auto py-6 space-y-4">
