@@ -752,18 +752,19 @@ export default function App() {
             </span>
           )}
 
-          {/* Quick Save Game Button */}
+          {/* Match Management & GPS Anchor Button */}
           {room && (
             <button
               onClick={() => {
                 setShowSaveModal(true);
                 audio.playClick();
               }}
-              className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
-              title="Save & Backup Game to resume later"
+              className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm"
+              title="Manage Team GPS Anchors, Player Roster, and Save Game"
             >
-              <BookmarkCheck className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Save Game</span>
+              <BookmarkCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Match Management</span>
+              <span className="sm:hidden">Manage</span>
             </button>
           )}
 

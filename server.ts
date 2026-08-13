@@ -89,6 +89,33 @@ function drawCardsFromDeck(room: RoomState, count: number, currentHand: Card[]):
   return [...currentHand, ...drawn];
 }
 
+// Helper to get a team's active GPS coordinate (prioritizing designated leadPlayer)
+function getTeamLocation(room: RoomState, team?: Team | null): { lat: number; lng: number } {
+  if (!team) return { lat: room.centerLat, lng: room.centerLng };
+
+  // 1. Prioritize designated leadPlayer anchor
+  if (team.leadPlayer) {
+    const lead = room.players.find((p) => p.name === team.leadPlayer);
+    if (lead && typeof lead.lat === 'number' && typeof lead.lng === 'number') {
+      return { lat: lead.lat, lng: lead.lng };
+    }
+  }
+
+  // 2. Try any player on the team with valid GPS coordinates
+  const playerWithGps = room.players.find(
+    (p) => p.team === team.name && typeof p.lat === 'number' && typeof p.lng === 'number'
+  );
+  if (playerWithGps && typeof playerWithGps.lat === 'number' && typeof playerWithGps.lng === 'number') {
+    return { lat: playerWithGps.lat, lng: playerWithGps.lng };
+  }
+
+  // 3. Fallback to team's cached lat/lng or room center
+  return {
+    lat: team.lat || room.centerLat,
+    lng: team.lng || room.centerLng,
+  };
+}
+
 function mapGooglePlaceType(googleTypes: string[]): string {
   if (googleTypes.includes('airport')) return 'Commercial Airport';
   if (googleTypes.includes('transit_station') || googleTypes.includes('subway_station') || googleTypes.includes('train_station')) return 'Rail Station';
@@ -311,6 +338,11 @@ app.post('/api/rooms/import', (req, res) => {
   // Ensure mandatory arrays and structures exist
   importedRoom.players = importedRoom.players || [];
   importedRoom.teams = importedRoom.teams || [];
+  importedRoom.teams.forEach((t) => {
+    if (!t.leadPlayer && t.players && t.players.length > 0) {
+      t.leadPlayer = t.players[0];
+    }
+  });
   importedRoom.grid = importedRoom.grid || [];
   importedRoom.history = importedRoom.history || [];
   importedRoom.vetoedTypes = importedRoom.vetoedTypes || [];
@@ -445,6 +477,7 @@ app.post('/api/rooms/:code/join', (req, res) => {
       role: 'SEEKER', // defaults to seeker
       score: 0,
       players: [playerName],
+      leadPlayer: playerName, // Default first player as the main GPS point
       lat: initialLat,
       lng: initialLng,
       lastActive: Date.now(),
@@ -453,6 +486,9 @@ app.post('/api/rooms/:code/join', (req, res) => {
   } else {
     if (!team.players.some((p) => p.toLowerCase() === playerName.toLowerCase())) {
       team.players.push(playerName);
+    }
+    if (!team.leadPlayer || !team.players.includes(team.leadPlayer)) {
+      team.leadPlayer = team.players[0];
     }
     if (!team.lat || !team.lng || (team.lat === room.centerLat && team.lng === room.centerLng)) {
       team.lat = initialLat;
@@ -465,6 +501,90 @@ app.post('/api/rooms/:code/join', (req, res) => {
   broadcastRoom(code.toUpperCase());
 
   res.json({ player, room });
+});
+
+// Set Team Main GPS Point / Lead Player
+app.post('/api/rooms/:code/set-team-lead', (req, res) => {
+  const { code } = req.params;
+  const { teamName, playerName } = req.body;
+  const room = getRoom(code);
+
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  const team = room.teams.find((t) => t.name === teamName);
+  if (!team) {
+    return res.status(404).json({ error: 'Team not found' });
+  }
+
+  if (!team.players.some((p) => p.toLowerCase() === playerName.toLowerCase())) {
+    return res.status(400).json({ error: `Player "${playerName}" is not a member of ${teamName}` });
+  }
+
+  team.leadPlayer = playerName;
+  const leadPlayerObj = room.players.find((p) => p.name === playerName);
+  if (leadPlayerObj && typeof leadPlayerObj.lat === 'number' && typeof leadPlayerObj.lng === 'number') {
+    team.lat = leadPlayerObj.lat;
+    team.lng = leadPlayerObj.lng;
+    team.lastActive = Date.now();
+  }
+
+  addHistoryLog(room, `Team "${teamName}" designated "${playerName}" as the Main GPS Point.`);
+  broadcastRoom(code);
+  res.json({ ok: true, room });
+});
+
+// Remove / Kick Player
+app.post('/api/rooms/:code/remove-player', (req, res) => {
+  const { code } = req.params;
+  const { playerName } = req.body;
+  const room = getRoom(code);
+
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  const playerIndex = room.players.findIndex((p) => p.name.toLowerCase() === (playerName || '').toLowerCase());
+  if (playerIndex === -1) {
+    return res.status(404).json({ error: `Player "${playerName}" not found in room.` });
+  }
+
+  const player = room.players[playerIndex];
+  const team = room.teams.find((t) => t.name === player.team);
+
+  // If game is active (not LOBBY) and this player is the designated lead GPS point AND there are other players on the team, require changing anchor first
+  if (room.gamePhase !== 'LOBBY' && team && team.leadPlayer?.toLowerCase() === playerName.toLowerCase() && team.players.length > 1) {
+    return res.status(400).json({
+      error: `Cannot remove "${playerName}" because they are currently the designated Main GPS Point for ${team.name}. Please switch the Main GPS Point to another teammate first.`
+    });
+  }
+
+  // Remove from room.players
+  room.players.splice(playerIndex, 1);
+
+  // Remove from team.players
+  if (team) {
+    team.players = team.players.filter((p) => p.toLowerCase() !== playerName.toLowerCase());
+    if (team.leadPlayer?.toLowerCase() === playerName.toLowerCase()) {
+      team.leadPlayer = team.players[0] || undefined;
+      if (team.leadPlayer) {
+        const newLead = room.players.find((p) => p.name === team.leadPlayer);
+        if (newLead && typeof newLead.lat === 'number') {
+          team.lat = newLead.lat;
+          team.lng = newLead.lng;
+        }
+      }
+    }
+    // If during lobby and team is empty, clean up empty team
+    if (room.gamePhase === 'LOBBY' && team.players.length === 0) {
+      room.teams = room.teams.filter((t) => t.name !== team.name);
+    }
+  }
+
+  addHistoryLog(room, `Player "${playerName}" was removed from the match.`);
+  broadcastRoom(code);
+  res.json({ ok: true, room });
 });
 
 // Update Location
@@ -487,12 +607,14 @@ app.post('/api/rooms/:code/update-location', (req, res) => {
       player.accuracy = accuracy;
     }
 
-    // Also update team coordinate representative
+    // Also update team coordinate representative if this player is the designated lead (or only GPS)
     const team = room.teams.find((t) => t.name === player.team);
     if (team) {
-      team.lat = lat;
-      team.lng = lng;
-      team.lastActive = Date.now();
+      if (!team.leadPlayer || team.leadPlayer.toLowerCase() === player.name.toLowerCase() || !team.lat) {
+        team.lat = lat;
+        team.lng = lng;
+        team.lastActive = Date.now();
+      }
     }
 
     // Check if player is on the Hider team and has a registered station pin
@@ -828,13 +950,15 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
   if (photoUrl) q.photoUrl = photoUrl;
 
   const hiderTeam = room.teams[room.hiderTeamIndex];
-  const hiderLat = hiderTeam?.lat || room.centerLat;
-  const hiderLng = hiderTeam?.lng || room.centerLng;
+  const hiderLoc = getTeamLocation(room, hiderTeam);
+  const hiderLat = hiderLoc.lat;
+  const hiderLng = hiderLoc.lng;
 
   // Let's identify seeker location
   const seekerTeam = room.teams.find((t) => t.role === 'SEEKER');
-  const seekerLat = seekerTeam?.lat || room.centerLat;
-  const seekerLng = seekerTeam?.lng || room.centerLng;
+  const seekerLoc = getTeamLocation(room, seekerTeam);
+  const seekerLat = seekerLoc.lat;
+  const seekerLng = seekerLoc.lng;
 
   // Track initial active grid cells
   const initialActive = room.grid.filter((c) => c.active).length;

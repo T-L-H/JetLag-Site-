@@ -295,16 +295,6 @@ export const BASE_DECK: Omit<Card, 'id'>[] = [
     curseId: 'curse_21',
   },
   {
-    title: 'Curse Of The Drained Brain',
-    type: 'CURSE' as const,
-    rarity: 'COMMON' as const,
-    desc: 'Choose three specific questions. Seekers are banned from asking them for the rest of the run.',
-    costDesc: 'Discard your entire remaining hand of cards!',
-    seekerEffect: 'YOU HAVE BEEN CURSED! The Hider has banned three specific question categories/types from being asked for the rest of this run.',
-    dismissalDesc: 'Acknowledge three banned questions.',
-    curseId: 'curse_22',
-  },
-  {
     title: 'Curse Of The Ransom Note',
     type: 'CURSE' as const,
     rarity: 'COMMON' as const,

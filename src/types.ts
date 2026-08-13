@@ -35,6 +35,7 @@ export interface Team {
   role: 'HIDER' | 'SEEKER';
   score: number; // hiding time in seconds
   players: string[]; // player names/ids
+  leadPlayer?: string; // Player name designated as the main GPS point/anchor for questions & math
   lat?: number;
   lng?: number;
   lastActive?: number;

@@ -313,9 +313,12 @@ export default function SeekerView({
   // Handle previewing the question before committing
   const handlePreview = () => {
     audio.playClick();
-    const seeker = room.players.find((p) => p.name === userName);
-    const seekerLat = seeker?.lat || room.centerLat;
-    const seekerLng = seeker?.lng || room.centerLng;
+    const userTeam = room.teams.find((t) => t.players.some((p) => p.toLowerCase() === userName.toLowerCase()));
+    const leadPlayerName = userTeam?.leadPlayer || userTeam?.players[0];
+    const leadPlayerObj = room.players.find((p) => p.name.toLowerCase() === leadPlayerName?.toLowerCase());
+    const seeker = room.players.find((p) => p.name.toLowerCase() === userName.toLowerCase());
+    const seekerLat = leadPlayerObj?.lat || seeker?.lat || userTeam?.lat || room.centerLat;
+    const seekerLng = leadPlayerObj?.lng || seeker?.lng || userTeam?.lng || room.centerLng;
 
     // Geographic query types validation
     if (qType === 'MEASURING') {

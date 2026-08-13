@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GameSize, RoomState } from '../types';
-import { Shield, Users, Radio, MapPin, Play, Plus, X, Globe, Copy, Check, Search, Compass, Navigation, RotateCcw, BookmarkCheck, FolderDown } from 'lucide-react';
+import { Shield, Users, Radio, MapPin, Play, Plus, X, Globe, Copy, Check, Search, Compass, Navigation, RotateCcw, BookmarkCheck, FolderDown, Star, UserX, Crown, AlertTriangle } from 'lucide-react';
 import audio from '../lib/audio';
 import { getDistance } from '../lib/geo';
 
@@ -1256,6 +1256,41 @@ export default function LobbyView({
 
   // 2. Waiting Lobby view (Active room state)
   const isGMAndLobbyOwner = isGM && room.players.length > 0;
+  const [kickConfirmPlayer, setKickConfirmPlayer] = useState<string | null>(null);
+
+  const handleSetTeamLead = async (teamName: string, playerName: string) => {
+    if (!room) return;
+    audio.playClick();
+    try {
+      await fetch(`/api/rooms/${room.code}/set-team-lead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamName, playerName }),
+      });
+    } catch (e) {
+      console.error('Failed to set team lead:', e);
+    }
+  };
+
+  const handleKickPlayer = async (playerName: string) => {
+    if (!room) return;
+    audio.playAlert();
+    try {
+      const res = await fetch(`/api/rooms/${room.code}/remove-player`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerName }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to remove player');
+      }
+    } catch (e) {
+      console.error('Failed to remove player:', e);
+    } finally {
+      setKickConfirmPlayer(null);
+    }
+  };
 
   return (
   <div className="max-w-4xl mx-auto py-6 space-y-4">
@@ -1322,28 +1357,107 @@ export default function LobbyView({
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         {/* Teams List */}
         <div className="md:col-span-7 bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-3xl p-6 shadow-2xl">
-          <h3 className="text-base font-bold text-slate-200 mb-4 flex items-center space-x-2">
-            <Users className="w-4.5 h-4.5 text-cyan-400" />
-            <span>Connected Teams ({room.teams.length})</span>
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-bold text-slate-200 flex items-center space-x-2">
+              <Users className="w-4.5 h-4.5 text-cyan-400" />
+              <span>Connected Teams ({room.teams.length})</span>
+            </h3>
+            <span className="text-[10px] text-slate-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+              ⭐ = Main GPS Point for Questions
+            </span>
+          </div>
 
-          <div className="space-y-3">
-            {room.teams.map((team) => (
-              <div
-                key={team.name}
-                className="bg-slate-950/70 border border-slate-850/80 p-4 rounded-2xl flex items-center justify-between"
-              >
-                <div>
-                  <h4 className="text-sm font-extrabold text-slate-200">{team.name}</h4>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Players: <span className="text-slate-300 font-medium">{team.players.join(', ')}</span>
-                  </p>
+          <div className="space-y-4">
+            {room.teams.map((team) => {
+              const leadName = team.leadPlayer || team.players[0];
+              const hasMultiple = team.players.length > 1;
+
+              return (
+                <div
+                  key={team.name}
+                  className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl space-y-3"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-850/80">
+                    <div>
+                      <h4 className="text-sm font-extrabold text-slate-100 flex items-center space-x-2">
+                        <span>{team.name}</span>
+                        <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950/40 border border-cyan-500/20 px-2 py-0.5 rounded-md">
+                          {team.players.length} {team.players.length === 1 ? 'Player' : 'Players'}
+                        </span>
+                      </h4>
+                    </div>
+                    <span className="bg-slate-900 border border-slate-800 text-cyan-300 text-xs px-2.5 py-1 rounded-xl font-bold">
+                      Seeker Team
+                    </span>
+                  </div>
+
+                  {/* Players in Team */}
+                  <div className="space-y-2">
+                    {team.players.map((pName) => {
+                      const pObj = room.players.find((p) => p.name.toLowerCase() === pName.toLowerCase());
+                      const isLead = leadName?.toLowerCase() === pName.toLowerCase();
+                      const isMe = pName.toLowerCase() === userName.toLowerCase();
+
+                      return (
+                        <div
+                          key={pName}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                            isLead
+                              ? 'bg-amber-950/20 border-amber-500/40 shadow-sm'
+                              : 'bg-slate-900/60 border-slate-850'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <div
+                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                pObj?.gpsAcquired ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'
+                              }`}
+                            />
+                            <span className="text-xs font-bold text-slate-200 truncate">
+                              {pName} {isMe && <span className="text-[10px] text-cyan-400 font-normal">(You)</span>}
+                            </span>
+                            {isLead && (
+                              <span className="inline-flex items-center space-x-1 text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded shrink-0">
+                                <Star className="w-2.5 h-2.5 fill-current" />
+                                <span>Main GPS</span>
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center space-x-2 shrink-0">
+                            {hasMultiple && !isLead && (
+                              <button
+                                type="button"
+                                onClick={() => handleSetTeamLead(team.name, pName)}
+                                className="text-[10px] font-bold text-slate-300 hover:text-amber-300 bg-slate-850 hover:bg-slate-800 border border-slate-700 px-2 py-1 rounded-lg transition-colors cursor-pointer flex items-center space-x-1"
+                                title="Designate as Main GPS Point for this team"
+                              >
+                                <Star className="w-3 h-3 text-amber-400" />
+                                <span>Make GPS Anchor</span>
+                              </button>
+                            )}
+
+                            {/* Kick Player Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to remove player "${pName}" from the lobby?`)) {
+                                  handleKickPlayer(pName);
+                                }
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-400 bg-slate-950 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-800 rounded-lg transition-colors cursor-pointer"
+                              title={`Kick ${pName} from lobby`}
+                            >
+                              <UserX className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <span className="bg-slate-900 border border-slate-800 text-cyan-300 text-xs px-2.5 py-1 rounded-xl font-bold">
-                  Seeker Team
-                </span>
-              </div>
-            ))}
+              );
+            })}
             {room.teams.length === 0 && (
               <div className="text-center py-8 text-xs text-slate-500 bg-slate-950/20 border border-dashed border-slate-850 rounded-2xl">
                 No teams connected yet. Share the code to join!
@@ -1359,11 +1473,11 @@ export default function LobbyView({
             <span>Active Connections ({room.players.length})</span>
           </h3>
 
-          <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
+          <div className="max-h-[260px] overflow-y-auto space-y-2 pr-1">
             {room.players.map((player) => (
               <div
-                key={player.id}
-                className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-slate-900 rounded-xl"
+                key={player.id || player.name}
+                className="flex items-center justify-between p-2.5 bg-slate-950/50 border border-slate-900 rounded-xl"
               >
                 <div className="flex items-center space-x-2">
                   <div className={`w-2.5 h-2.5 rounded-full ${player.gpsAcquired ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
@@ -1383,6 +1497,20 @@ export default function LobbyView({
                   <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-lg">
                     {player.team}
                   </span>
+
+                  {/* Quick Kick from Connections List */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Remove "${player.name}" from the game?`)) {
+                        handleKickPlayer(player.name);
+                      }
+                    }}
+                    className="p-1 text-slate-500 hover:text-rose-400 rounded-md transition-colors cursor-pointer"
+                    title={`Remove ${player.name}`}
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
