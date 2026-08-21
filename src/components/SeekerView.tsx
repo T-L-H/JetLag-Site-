@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RoomState, ActiveQuestion, ActiveCurse } from '../types';
 import { MATCHING_POIS, MEASURING_POIS, PHOTO_SUBJECTS } from '../lib/cardsData';
-import { Radio, MapPin, Eye, Compass, ShieldAlert, Sparkles, Layers, Image, Check, X, Shield, Camera, AlertCircle, HelpCircle, Flame } from 'lucide-react';
+import { Radio, MapPin, Eye, Compass, ShieldAlert, Sparkles, Layers, Image, Check, X, Shield, Camera, AlertCircle, HelpCircle, Flame, CheckCircle2, MessageSquare } from 'lucide-react';
 import audio from '../lib/audio';
 
 // Helper function to check if a pin is vetoed based on lat/lng proximity (~100m)
@@ -159,6 +159,26 @@ export default function SeekerView({
       audio.playCurse();
     }
   }, [room.activeCurses.length]);
+
+  // Auto alert sound when question is answered or vetoed
+  const [lastQuestionStatus, setLastQuestionStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const currentStatus = room.activeQuestion?.status || null;
+    if (currentStatus && currentStatus !== 'PENDING' && currentStatus !== lastQuestionStatus) {
+      if (currentStatus === 'ANSWERED') {
+        audio.playSuccess();
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try {
+            navigator.vibrate([200, 100, 200]);
+          } catch (_) {}
+        }
+      } else if (currentStatus === 'VETOED') {
+        audio.playCurse();
+      }
+    }
+    setLastQuestionStatus(currentStatus);
+  }, [room.activeQuestion?.status, lastQuestionStatus]);
 
   // Auto-select first non-banned MATCHING POI if current is banned
   useEffect(() => {
@@ -493,7 +513,115 @@ export default function SeekerView({
 
   // --- RENDERS ---
 
-  // Lockout 0: Full-screen high-priority alert when a Seeker question is VETOED
+  // Lockout 0A: Full-screen high-priority alert when a Seeker question is ANSWERED
+  if (room.activeQuestion && room.activeQuestion.status === 'ANSWERED') {
+    const isPhoto = room.activeQuestion.type === 'PHOTO';
+    const q = room.activeQuestion;
+
+    return (
+      <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-[2500] pointer-events-auto animate-in fade-in duration-200">
+        <div className="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl p-6 shadow-2xl max-w-md w-full text-center space-y-5 relative overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          {isPhoto ? (
+            <>
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto animate-bounce shadow-lg shadow-amber-950/50">
+                <Camera className="w-8 h-8" />
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                  📸 PHOTO CLUE RECEIVED
+                </span>
+                <h2 className="text-2xl font-black text-slate-100 uppercase tracking-tight mt-1">Photo Sent via Text!</h2>
+                <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
+                  The Hiding team took and texted a real-life photo of:
+                </p>
+                <div className="bg-slate-950/80 border border-amber-500/30 rounded-xl py-2 px-3 text-amber-300 font-black text-sm">
+                  "{q.selectedSubject}"
+                </div>
+              </div>
+
+              <div className="bg-slate-950/90 border border-amber-500/20 p-4 rounded-2xl text-left space-y-2.5">
+                <div className="flex items-center space-x-2 text-amber-300 font-bold text-xs">
+                  <MessageSquare className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Check your phone's text messages now!</span>
+                </div>
+                <p className="text-xs text-slate-200 leading-relaxed">
+                  Open your messaging app / chat to inspect the photo clue. Look for distinctive buildings, shadows, textures, and street details to pinpoint their location!
+                </p>
+                <div className="border-t border-amber-500/20 pt-2 flex justify-between items-center text-[11px] text-slate-400">
+                  <span>Hider Bonus:</span>
+                  <span className="text-amber-300 font-semibold">+1 card drawn to hand</span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setPreviewingQuestion(null);
+                  setQType(null);
+                  onClearQuestion();
+                  audio.playClick();
+                }}
+                className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow-lg cursor-pointer uppercase tracking-wider active:scale-95 flex items-center justify-center space-x-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Acknowledge Clue & Continue Search</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto animate-pulse shadow-lg shadow-emerald-950/50">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                  QUESTION ANSWERED
+                </span>
+                <h2 className="text-xl font-black text-slate-100 uppercase tracking-tight mt-1">{q.title}</h2>
+              </div>
+
+              {q.mathResult && (
+                <div className="bg-slate-950/90 border border-emerald-500/20 p-4 rounded-2xl text-left space-y-2.5">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400 font-mono">
+                      Radar Search Area Updated
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-100 font-semibold leading-relaxed">
+                    {q.mathResult.description}
+                  </p>
+                  <div className="border-t border-emerald-950/60 pt-2 flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Search area eliminated:</span>
+                    <span className="text-emerald-400 font-extrabold text-sm">
+                      -{q.mathResult.eliminatedCount} grid cells
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  setPreviewingQuestion(null);
+                  setQType(null);
+                  onClearQuestion();
+                  audio.playClick();
+                }}
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow-lg cursor-pointer uppercase tracking-wider active:scale-95 flex items-center justify-center space-x-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>View Updated Map & Plan Next Move</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Lockout 0B: Full-screen high-priority alert when a Seeker question is VETOED
   if (room.activeQuestion && room.activeQuestion.status === 'VETOED') {
     return (
       <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-[2500] pointer-events-auto">
@@ -623,8 +751,6 @@ export default function SeekerView({
 
   // Active Question confirmation overlay
   if (room.activeQuestion && !isMobileFloating) {
-    const isPhotoAnswer = room.activeQuestion.status === 'ANSWERED' && room.activeQuestion.photoUrl;
-
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-2xl max-w-xl mx-auto py-5 md:py-6 space-y-3 md:space-y-4 text-center relative">
         {room.activeQuestion.status !== 'PENDING' && (
@@ -659,21 +785,19 @@ export default function SeekerView({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Pop up showing photo upload answer with Download Button */}
-            {isPhotoAnswer && (
-              <div className="space-y-3 bg-slate-950/80 p-4 rounded-2xl border border-slate-850">
-                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest block">📸 Hider Photograph Subject:</span>
-                <div className="border border-slate-850 rounded-xl overflow-hidden max-h-64 shadow-inner">
-                  <img src={room.activeQuestion.photoUrl} alt="Hider upload" className="w-full h-full object-cover" />
+            {room.activeQuestion.type === 'PHOTO' && (
+              <div className="space-y-2 bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl text-left">
+                <div className="flex items-center space-x-2 text-amber-300 font-bold text-xs">
+                  <MessageSquare className="w-4 h-4" />
+                  <span>📸 Photo Clue Sent via Text Message!</span>
                 </div>
-                <a
-                  href={room.activeQuestion.photoUrl}
-                  download={`jetlag_photo_${room.activeQuestion.selectedSubject?.replace(/\s+/g, '_')}.png`}
-                  className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow inline-flex items-center justify-center space-x-1.5 transition-transform hover:scale-[1.01]"
-                >
-                  <Image className="w-4 h-4" />
-                  <span>Save Photo (HIGHLY RECOMMENDED)</span>
-                </a>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  The Hiders took and texted a photo of <strong>"{room.activeQuestion.selectedSubject}"</strong> directly to your phone. Check your messages to analyze the picture!
+                </p>
+                <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Hider Reward:</span>
+                  <span className="text-amber-300 font-semibold">+1 card drawn to hand</span>
+                </div>
               </div>
             )}
 
@@ -1422,25 +1546,19 @@ export default function SeekerView({
               ) : (
                 <div className="space-y-2.5">
                   {/* Photo answer view */}
-                  {room.activeQuestion.status === 'ANSWERED' && room.activeQuestion.photoUrl && (
-                    <div className="space-y-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-900">
-                      <span className="text-[8px] font-bold text-amber-400 uppercase tracking-widest block font-sans">📸 Hider Photograph:</span>
-                      <div className="border border-slate-900 rounded-lg overflow-hidden max-h-40 shadow-inner">
-                        <img src={room.activeQuestion.photoUrl} alt="Hider upload" className="w-full h-full object-cover" />
+                  {room.activeQuestion.status === 'ANSWERED' && room.activeQuestion.type === 'PHOTO' && (
+                    <div className="space-y-2 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 text-left">
+                      <div className="flex items-center space-x-1.5 text-amber-300 font-bold text-[10px]">
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>📸 Photo Sent via Text!</span>
                       </div>
-                      <a
-                        href={room.activeQuestion.photoUrl}
-                        download={`jetlag_photo_${room.activeQuestion.selectedSubject?.replace(/\s+/g, '_')}.png`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full py-2 bg-amber-500 hover:bg-amber-400 active:scale-[0.97] text-slate-950 text-[10px] font-black rounded-lg shadow inline-flex items-center justify-center space-x-1.5 transition-all uppercase tracking-wider font-sans"
-                      >
-                        <Image className="w-3.5 h-3.5" />
-                        <span>Save Photo</span>
-                      </a>
-                      <p className="text-[8px] text-slate-400 text-center leading-normal mt-1 font-medium italic">
-                        Tip: If download doesn't start, long-press the photo above to choose "Save to Photos".
+                      <p className="text-[10px] text-slate-300 leading-normal">
+                        Hiders texted a photo of <strong>"{room.activeQuestion.selectedSubject}"</strong> to your phone. Check your text messages!
                       </p>
+                      <div className="pt-1 border-t border-amber-500/20 flex justify-between text-[9px] text-slate-400">
+                        <span>Hider Reward:</span>
+                        <span className="text-amber-300 font-medium">+1 card drawn</span>
+                      </div>
                     </div>
                   )}
 

@@ -409,9 +409,7 @@ export default function HiderView({
     });
   };
 
-  // Photo Question Upload State
-  const [photoBase64, setPhotoBase64] = useState<string>('');
-  const [uploading, setUploading] = useState(false);
+  // Photo Question Sending state
   const [sendingPhoto, setSendingPhoto] = useState(false);
 
   // Card Draft choices selection state
@@ -485,96 +483,6 @@ export default function HiderView({
     }
     return () => clearInterval(interval);
   }, [catchPressed, onCatchHider]);
-
-  const compressImage = (file: File, maxWidth = 720, maxHeight = 720, quality = 0.65): Promise<string> => {
-    return new Promise((resolve) => {
-      let objectUrl = '';
-      try {
-        objectUrl = URL.createObjectURL(file);
-      } catch (e) {
-        // Fallback to FileReader if createObjectURL is unavailable
-        const reader = new FileReader();
-        reader.onload = (e) => resolve((e.target?.result as string) || '');
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(file);
-        return;
-      }
-
-      const img = new window.Image();
-      const cleanup = () => {
-        try {
-          if (objectUrl) URL.revokeObjectURL(objectUrl);
-        } catch (_) {}
-      };
-
-      img.onerror = () => {
-        cleanup();
-        // Fallback to FileReader
-        const reader = new FileReader();
-        reader.onload = (e) => resolve((e.target?.result as string) || '');
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(file);
-      };
-
-      img.onload = () => {
-        try {
-          let width = img.width;
-          let height = img.height;
-
-          if (width > maxWidth || height > maxHeight) {
-            if (width > height) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            } else {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            cleanup();
-            resolve('');
-            return;
-          }
-
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', quality);
-          cleanup();
-          resolve(dataUrl);
-        } catch (err) {
-          console.error('Error drawing image onto canvas:', err);
-          cleanup();
-          resolve('');
-        }
-      };
-
-      img.src = objectUrl;
-    });
-  };
-
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const compressedDataUrl = await compressImage(file);
-      if (compressedDataUrl) {
-        setPhotoBase64(compressedDataUrl);
-        audio.playSuccess();
-      }
-    } catch (err) {
-      console.error('Error compressing photo:', err);
-    } finally {
-      setUploading(false);
-      // Reset input value so user can re-select if needed
-      e.target.value = '';
-    }
-  };
 
   const handleCastConfirm = (fulfilled: boolean) => {
     if (!activeCurseToCast) return;
@@ -1059,71 +967,72 @@ export default function HiderView({
 
               {/* Action Handlers */}
               <div className="space-y-3 pt-3 border-t border-slate-850">
-                {room.activeQuestion.type === 'PHOTO' ? (
-                  <div className="space-y-3">
-                    <span className="block text-[10px] font-bold text-slate-400">Take & Upload Photo of Subject:</span>
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handlePhotoUpload}
-                        className="hidden"
-                        id="camera-upload"
-                      />
-                      <label
-                        htmlFor="camera-upload"
-                        className="flex-1 py-2 px-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer"
-                      >
-                        <Camera className="w-4 h-4 text-rose-400" />
-                        <span>{uploading ? 'Processing...' : photoBase64 ? 'Retake Photo' : 'Take / Upload Photo'}</span>
-                      </label>
-                    </div>
+                {room.activeQuestion.type === 'PHOTO' ? (() => {
+                  const vetoCard = room.hiderHand.find(c => c.title === 'Veto' || c.title?.toLowerCase() === 'veto');
+                  return (
+                    <div className="space-y-4 text-left">
+                      <div className="bg-slate-950/80 border border-amber-500/30 p-4 rounded-2xl space-y-3">
+                        <div className="flex items-center space-x-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-amber-400">
+                            Photo Clue Requested
+                          </span>
+                        </div>
+                        
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Subject to Photograph:</span>
+                          <h4 className="text-sm font-black text-amber-300 mt-0.5">"{room.activeQuestion.selectedSubject}"</h4>
+                        </div>
 
-                    {photoBase64 && (
-                      <div className="border border-slate-800 rounded-xl overflow-hidden max-h-40 relative">
-                        <img src={photoBase64} alt="Subject capture" className="w-full h-full object-cover" />
-                        <button
-                          onClick={() => setPhotoBase64('')}
-                          className="absolute top-2 right-2 p-1 bg-slate-950/80 hover:bg-slate-950 text-slate-400 hover:text-white rounded-lg"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-slate-300 space-y-2">
+                          <p className="font-semibold text-slate-100 flex items-center space-x-1.5">
+                            <span>📱 Please text the photo to the Seeking team:</span>
+                          </p>
+                          <ol className="space-y-1 text-[11px] text-slate-300 list-decimal list-inside leading-relaxed">
+                            <li>Take a real-life photo of <strong>"{room.activeQuestion.selectedSubject}"</strong> from where you are hiding.</li>
+                            <li>Send / text the photo directly to the Seekers via text message or chat.</li>
+                            <li>Tap <strong className="text-emerald-400">"Sent Photo"</strong> below to claim your <strong className="text-amber-300">1 card reward</strong> into your hand!</li>
+                          </ol>
+                        </div>
                       </div>
-                    )}
 
-                    <button
-                      onClick={async () => {
-                        if (!photoBase64 || sendingPhoto) return;
-                        setSendingPhoto(true);
-                        try {
-                          await onAnswerQuestion(true, photoBase64);
-                          setPhotoBase64('');
-                          audio.playSuccess();
-                        } catch (err) {
-                          console.error('Failed to send photo:', err);
-                        } finally {
-                          setSendingPhoto(false);
-                        }
-                      }}
-                      disabled={!photoBase64 || sendingPhoto}
-                      className={`w-full py-2.5 rounded-xl text-xs font-black shadow transition-all flex items-center justify-center space-x-2 ${
-                        photoBase64 && !sendingPhoto
-                          ? 'bg-rose-500 hover:bg-rose-400 text-slate-950 cursor-pointer shadow-rose-500/20'
-                          : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-750'
-                      }`}
-                    >
-                      {sendingPhoto ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
-                          <span>Sending Photo to Seekers...</span>
-                        </>
-                      ) : (
-                        <span>📤 Send Photo</span>
-                      )}
-                    </button>
-                  </div>
-                ) : (() => {
+                      <div className={vetoCard ? "grid grid-cols-2 gap-3" : "w-full"}>
+                        <button
+                          onClick={async () => {
+                            if (sendingPhoto) return;
+                            setSendingPhoto(true);
+                            try {
+                              await onAnswerQuestion(true);
+                              audio.playSuccess();
+                            } catch (err) {
+                              console.error('Failed to answer photo question:', err);
+                            } finally {
+                              setSendingPhoto(false);
+                            }
+                          }}
+                          disabled={sendingPhoto}
+                          className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow-lg flex items-center justify-center space-x-2 cursor-pointer uppercase tracking-wider active:scale-[0.98]"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>{sendingPhoto ? 'Confirming...' : 'Sent Photo'}</span>
+                        </button>
+
+                        {vetoCard && (
+                          <button
+                            onClick={() => {
+                              onVetoQuestion(vetoCard.id);
+                              audio.playSuccess();
+                            }}
+                            className="w-full py-3.5 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-slate-950 text-xs font-black rounded-xl transition-all shadow-lg flex items-center justify-center space-x-1.5 cursor-pointer active:scale-[0.98]"
+                          >
+                            <X className="w-4 h-4" />
+                            <span>Veto Question</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })() : (() => {
                   const evalResult = evaluateActiveQuestion(room);
                   const vetoCard = room.hiderHand.find(c => c.title === 'Veto' || c.title?.toLowerCase() === 'veto');
                   
