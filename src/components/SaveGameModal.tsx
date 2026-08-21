@@ -193,7 +193,7 @@ export default function SaveGameModal({ room, onClose }: SaveGameModalProps) {
                   <span>Main GPS Point Designation</span>
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  For teams with multiple players, 1 person serves as the <strong>Main GPS Point</strong>. All questions (Radar, Matching Voronoi, Measuring, etc.) calculate distances exclusively from their location. You can switch who the main GPS point is at any time.
+                  For teams with multiple players, 1 person serves as the <strong>Main GPS Point</strong>. All distance questions (Radar scans, Measuring pin, Matching landmarks, Thermometer path, etc.) are calculated from their location. You can switch who the main GPS point is at any time.
                 </p>
               </div>
 

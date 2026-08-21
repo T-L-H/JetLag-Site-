@@ -119,7 +119,11 @@ export default function SeekerView({
     return () => clearTimeout(delayDebounce);
   }, [addressInput]);
 
-  const [photoSubject, setPhotoSubject] = useState('');
+  const [photoSubject, setPhotoSubject] = useState<string>(() => {
+    const subjects = PHOTO_SUBJECTS[room.gameSize] || PHOTO_SUBJECTS.M;
+    const firstNonBanned = subjects.find(subj => !room.vetoedTypes.includes(`PHOTO:SUBJ:${subj}`));
+    return firstNonBanned || subjects[0];
+  });
 
   // Thermometer state
   const [thermometerDistance, setThermometerDistance] = useState(0.5); // miles
@@ -203,16 +207,19 @@ export default function SeekerView({
     }
   }, [room.vetoedTypes, radarDistance, setRadarDistance]);
 
-  // Set default photo subject based on game size (filtering out banned options)
+  // Auto-select first non-banned photo subject if current subject is banned or missing from current game size
   useEffect(() => {
     const subjects = PHOTO_SUBJECTS[room.gameSize] || PHOTO_SUBJECTS.M;
-    const firstNonBanned = subjects.find(subj => !room.vetoedTypes.includes(`PHOTO:SUBJ:${subj}`));
-    if (firstNonBanned) {
-      setPhotoSubject(firstNonBanned);
-    } else {
-      setPhotoSubject(subjects[0]);
+    const isCurrentBanned = !photoSubject || !subjects.includes(photoSubject) || room.vetoedTypes.includes(`PHOTO:SUBJ:${photoSubject}`);
+    if (isCurrentBanned) {
+      const firstAvailable = subjects.find(subj => !room.vetoedTypes.includes(`PHOTO:SUBJ:${subj}`));
+      if (firstAvailable) {
+        setPhotoSubject(firstAvailable);
+      } else {
+        setPhotoSubject(subjects[0]);
+      }
     }
-  }, [room.gameSize, room.vetoedTypes]);
+  }, [room.gameSize, room.vetoedTypes, photoSubject, setPhotoSubject]);
 
   // Handle Catch holding
   useEffect(() => {
@@ -234,12 +241,6 @@ export default function SeekerView({
     }
     return () => clearInterval(interval);
   }, [catchPressed, onCatchHider]);
-
-  // Set default photo subject based on game size
-  useEffect(() => {
-    const subjects = PHOTO_SUBJECTS[room.gameSize] || PHOTO_SUBJECTS.M;
-    setPhotoSubject(subjects[0]);
-  }, [room.gameSize]);
 
   // Geocode address or place name to lat/lng using OSM Nominatim & local POIs
   const handleGeocodeAddress = async () => {
@@ -678,10 +679,10 @@ export default function SeekerView({
 
             {room.activeQuestion.mathResult && (
               <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-left space-y-2">
-                <h4 className="text-xs font-black text-emerald-400 uppercase tracking-wider">Geospatial Result Outcome</h4>
+                <h4 className="text-xs font-black text-emerald-400 uppercase tracking-wider">Question Result & Map Update</h4>
                 <p className="text-xs text-slate-300 leading-normal">{room.activeQuestion.mathResult.description}</p>
                 <div className="border-t border-emerald-950/50 pt-2 flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Search cells eliminated:</span>
+                  <span className="text-slate-400">Search area eliminated:</span>
                   <span className="text-emerald-400 font-bold text-sm">-{room.activeQuestion.mathResult.eliminatedCount} cells</span>
                 </div>
               </div>
@@ -691,7 +692,7 @@ export default function SeekerView({
               <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl text-left space-y-1">
                 <h4 className="text-xs font-black text-rose-400 uppercase tracking-wider">Question Vetoed</h4>
                 <p className="text-xs text-slate-300 leading-normal">
-                  Hiders spent their Veto Powerup card to block this question. Proximity questions of this type are now banned for the rest of this round.
+                  Hiders spent their Veto Powerup card to block this question. Questions of this category are now banned for the rest of this round.
                 </p>
               </div>
             )}
@@ -722,23 +723,23 @@ export default function SeekerView({
         </div>
 
         <div>
-          <span className="text-[10px] uppercase font-bold tracking-widest text-cyan-400">Confirm Proximity Query</span>
+          <span className="text-[10px] uppercase font-bold tracking-widest text-cyan-400">Ask Question to Hiders</span>
           <h3 className="text-sm font-black text-slate-100 mt-1">{previewingQuestion.title}</h3>
         </div>
 
         <div className="bg-slate-950 p-4 rounded-2xl text-left space-y-2 text-xs">
           <div className="flex justify-between">
-            <span className="text-slate-400">Reward Drawn for Hider:</span>
+            <span className="text-slate-400">Reward Given to Hider:</span>
             <span className="text-amber-400 font-bold">{previewingQuestion.rewardDesc}</span>
           </div>
           <div className="flex justify-between border-t border-slate-900 pt-2">
-            <span className="text-slate-400">Geospatial Type:</span>
+            <span className="text-slate-400">Question Category:</span>
             <span className="text-slate-200 font-medium">{previewingQuestion.type}</span>
           </div>
         </div>
 
         <p className="text-[10px] text-slate-400">
-          Proposing this question will trigger an instant prompt on the Hiders' screen.
+          Sending this question will prompt the Hiders to answer or veto. Their answer will update your search map in real time!
         </p>
 
         <div className="grid grid-cols-2 gap-3 pt-2">
@@ -746,7 +747,7 @@ export default function SeekerView({
             onClick={handleConfirmAsk}
             className="py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow cursor-pointer"
           >
-            Ask Question?
+            Confirm & Send
           </button>
           <button
             onClick={() => { setPreviewingQuestion(null); audio.playClick(); }}
@@ -870,17 +871,17 @@ export default function SeekerView({
             <div className="flex justify-between items-center pb-2 border-b border-slate-900 shrink-0">
               <div>
                 <span className="text-[9px] font-black uppercase tracking-wider text-cyan-400">
-                  {mobileActiveTab === 'STATUS' ? 'LIVE TRACKING STATUS' : 'QUERY CONFIGURATION'}
+                  {mobileActiveTab === 'STATUS' ? 'LIVE TRACKING STATUS' : 'QUESTION SETUP'}
                 </span>
                 <h4 className="text-xs font-black text-slate-200 uppercase mt-0.5 font-sans">
                   {mobileActiveTab === 'STATUS' 
                     ? 'Status & Apprehend'
-                    : qType === 'MATCHING' ? 'Matching (POI)'
-                    : qType === 'MEASURING' ? 'Measuring (Pin)'
-                    : qType === 'THERMOMETER' ? 'Thermometer Path'
-                    : qType === 'RADAR' ? 'Radar Search'
-                    : qType === 'TENTACLES' ? 'Tentacles Nearest'
-                    : 'Photo Verification'
+                    : qType === 'MATCHING' ? '1. Matching Landmark'
+                    : qType === 'MEASURING' ? '2. Measuring Pin'
+                    : qType === 'THERMOMETER' ? '3. Thermometer Path'
+                    : qType === 'RADAR' ? '4. Radar Circle'
+                    : qType === 'TENTACLES' ? '5. Tentacles Scan'
+                    : '6. Photo Clue'
                   }
                 </h4>
               </div>
@@ -902,7 +903,7 @@ export default function SeekerView({
               {qType === 'MATCHING' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Select POI Type</label>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Select Landmark Type</label>
                     <select
                       value={matchingPoi}
                       onChange={(e) => {
@@ -921,18 +922,38 @@ export default function SeekerView({
                       })}
                     </select>
                   </div>
-                  <p className="text-[9px] text-slate-400 leading-normal">
-                    <b>Math:</b> Nearest-Neighbor / Voronoi territory. YES keeps Seeker's closest "{matchingPoi}" territory; NO eliminates only that territory.
-                  </p>
+                  <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-2.5 space-y-1 text-[9px] text-slate-300 text-left">
+                    <div className="flex items-center space-x-1 text-cyan-400 font-bold uppercase text-[8px]">
+                      <HelpCircle className="w-3 h-3" />
+                      <span>How It Works</span>
+                    </div>
+                    <p className="leading-tight text-slate-300">
+                      Asks if the Hider's closest <b>{matchingPoi}</b> is the exact same one as yours.
+                    </p>
+                    <div className="text-[8px] text-slate-400 space-y-0.5 pt-0.5">
+                      <p>• <b className="text-emerald-400">YES</b> = Hider shares your nearest {matchingPoi}! All other areas are eliminated.</p>
+                      <p>• <b className="text-rose-400">NO</b> = Hider is near a different {matchingPoi}. Your local zone is eliminated.</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* MEASURING FORM */}
               {qType === 'MEASURING' && (
-                <div className="space-y-3">
-                  <p className="text-[9px] text-slate-400 leading-normal">
-                    <b>Math:</b> Bisects distances. Yes = closer to pin. No = further.
-                  </p>
+                <div className="space-y-2">
+                  <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-2.5 space-y-1 text-[9px] text-slate-300 text-left">
+                    <div className="flex items-center space-x-1 text-cyan-400 font-bold uppercase text-[8px]">
+                      <HelpCircle className="w-3 h-3" />
+                      <span>How It Works</span>
+                    </div>
+                    <p className="leading-tight text-slate-300">
+                      Drop a <b>Target Pin</b> on the map. Asks if the Hider is closer to the Target Pin than to your team.
+                    </p>
+                    <div className="text-[8px] text-slate-400 space-y-0.5 pt-0.5">
+                      <p>• <b className="text-cyan-400">Closer to Pin</b> = Eliminates the entire half of the map on your side.</p>
+                      <p>• <b className="text-cyan-400">Closer to You</b> = Eliminates the entire half of the map on the pin's side.</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1028,7 +1049,7 @@ export default function SeekerView({
               {qType === 'THERMOMETER' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Target Distance</label>
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Target Walking Distance</label>
                     <select
                       value={thermometerDistance}
                       onChange={(e) => {
@@ -1045,7 +1066,7 @@ export default function SeekerView({
                       </option>
                       {room.gameSize !== 'S' && (
                         <option value={10.0} disabled={room.vetoedTypes.includes('THERMOMETER:DIST:10')}>
-                          10.0 miles (16km) {room.vetoedTypes.includes('THERMOMETER:DIST:10') ? '(BANNED)' : ''}
+                           10.0 miles (16km) {room.vetoedTypes.includes('THERMOMETER:DIST:10') ? '(BANNED)' : ''}
                         </option>
                       )}
                       {room.gameSize === 'L' && (
@@ -1112,9 +1133,19 @@ export default function SeekerView({
                       </button>
                     </div>
                   )}
-                  <p className="text-[9px] text-slate-400 leading-normal">
-                    <b>Math:</b> Yes = Hotter (closer to you). No = Colder.
-                  </p>
+                  <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-2.5 space-y-1 text-[9px] text-slate-300 text-left">
+                    <div className="flex items-center space-x-1 text-cyan-400 font-bold uppercase text-[8px]">
+                      <HelpCircle className="w-3 h-3" />
+                      <span>How It Works</span>
+                    </div>
+                    <p className="leading-tight text-slate-300">
+                      Walk <b>{thermometerDistance} miles</b>, then ask if you got Warmer (closer) or Colder (further).
+                    </p>
+                    <div className="text-[8px] text-slate-400 space-y-0.5 pt-0.5">
+                      <p>• <b className="text-orange-400">🔥 Hotter</b> = You got closer to the Hider! Eliminates area behind your start point.</p>
+                      <p>• <b className="text-blue-400">❄️ Colder</b> = You moved further away! Eliminates area in the direction you walked.</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1141,9 +1172,19 @@ export default function SeekerView({
                       <option value={50.00} disabled={room.vetoedTypes.includes('RADAR:DIST:50')}>50.00 miles (80km)</option>
                     </select>
                   </div>
-                  <p className="text-[9px] text-slate-400 leading-normal">
-                    <b>Math:</b> Yes = restricts inside radius. No = subtracts radius circle.
-                  </p>
+                  <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-2.5 space-y-1 text-[9px] text-slate-300 text-left">
+                    <div className="flex items-center space-x-1 text-cyan-400 font-bold uppercase text-[8px]">
+                      <HelpCircle className="w-3 h-3" />
+                      <span>How It Works</span>
+                    </div>
+                    <p className="leading-tight text-slate-300">
+                      Asks if the Hider is hiding within a <b>{radarDistance} mile</b> radius circle of your position.
+                    </p>
+                    <div className="text-[8px] text-slate-400 space-y-0.5 pt-0.5">
+                      <p>• <b className="text-emerald-400">YES (Inside)</b> = Hider is inside! Everything outside circle is eliminated.</p>
+                      <p>• <b className="text-rose-400">NO (Outside)</b> = Hider is outside! The entire {radarDistance} mi circle is eliminated.</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1152,7 +1193,7 @@ export default function SeekerView({
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">POI Type</label>
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Landmark Type</label>
                       <select
                         value={tentaclePoi}
                         onChange={(e) => {
@@ -1176,7 +1217,7 @@ export default function SeekerView({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Radius</label>
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Search Radius</label>
                       <select
                         value={tentacleDistance}
                         onChange={(e) => {
@@ -1190,9 +1231,19 @@ export default function SeekerView({
                       </select>
                     </div>
                   </div>
-                  <p className="text-[9px] text-slate-400 leading-normal">
-                    <b>Math:</b> Inside = isolates nearest POI Voronoi cell. Outside = eliminates circle.
-                  </p>
+                  <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-2.5 space-y-1 text-[9px] text-slate-300 text-left">
+                    <div className="flex items-center space-x-1 text-cyan-400 font-bold uppercase text-[8px]">
+                      <HelpCircle className="w-3 h-3" />
+                      <span>How It Works</span>
+                    </div>
+                    <p className="leading-tight text-slate-300">
+                      Scans a <b>{tentacleDistance} mile</b> circle. If Hider is inside, reveals which <b>{tentaclePoi}</b> landmark they are closest to.
+                    </p>
+                    <div className="text-[8px] text-slate-400 space-y-0.5 pt-0.5">
+                      <p>• <b className="text-emerald-400">Inside</b> = Isolates the exact {tentaclePoi} zone where Hider is hiding!</p>
+                      <p>• <b className="text-rose-400">Outside</b> = Eliminates the entire {tentacleDistance} mi search circle around you.</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1219,9 +1270,18 @@ export default function SeekerView({
                       })}
                     </select>
                   </div>
-                  <p className="text-[9px] text-slate-400 leading-normal">
-                    <b>Task:</b> Hiders must upload a direct, unedited native camera photo of this subject.
-                  </p>
+                  <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-2.5 space-y-1 text-[9px] text-slate-300 text-left">
+                    <div className="flex items-center space-x-1 text-cyan-400 font-bold uppercase text-[8px]">
+                      <HelpCircle className="w-3 h-3" />
+                      <span>How It Works</span>
+                    </div>
+                    <p className="leading-tight text-slate-300">
+                      Hiders must take and send a real photograph of <b>"{photoSubject}"</b> from where they are currently hiding.
+                    </p>
+                    <div className="text-[8px] text-slate-400 space-y-0.5 pt-0.5">
+                      <p>• Gives visual scenery clues (buildings, terrain, flora) to deduce their spot.</p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1296,17 +1356,17 @@ export default function SeekerView({
             </div>
 
             <div>
-              <span className="text-[8px] uppercase font-bold tracking-widest text-cyan-400 block font-sans">Confirm Proximity Query</span>
+              <span className="text-[8px] uppercase font-bold tracking-widest text-cyan-400 block font-sans">Ask Question to Hiders</span>
               <h3 className="text-xs font-black text-slate-100 mt-1 leading-normal font-sans">{previewingQuestion.title}</h3>
             </div>
 
             <div className="bg-slate-950 p-3 rounded-xl text-left space-y-1.5 text-[10px]">
               <div className="flex justify-between">
-                <span className="text-slate-400">Hider Reward:</span>
+                <span className="text-slate-400">Reward Given to Hider:</span>
                 <span className="text-amber-400 font-bold">{previewingQuestion.rewardDesc}</span>
               </div>
               <div className="flex justify-between border-t border-slate-900 pt-1.5">
-                <span className="text-slate-400">Geospatial Type:</span>
+                <span className="text-slate-400">Question Category:</span>
                 <span className="text-slate-200 font-semibold">{previewingQuestion.type}</span>
               </div>
             </div>
@@ -1316,7 +1376,7 @@ export default function SeekerView({
                 onClick={handleConfirmAsk}
                 className="py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black rounded-xl transition-all shadow cursor-pointer uppercase font-sans"
               >
-                Ask Question
+                Confirm & Send
               </button>
               <button
                 onClick={() => { setPreviewingQuestion(null); audio.playClick(); }}
@@ -1386,10 +1446,10 @@ export default function SeekerView({
 
                   {room.activeQuestion.mathResult && (
                     <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl text-left space-y-1">
-                      <h4 className="text-[9px] font-black text-emerald-400 uppercase tracking-wider">Geospatial Result</h4>
+                      <h4 className="text-[9px] font-black text-emerald-400 uppercase tracking-wider">Question Result & Map Update</h4>
                       <p className="text-[10px] text-slate-300 leading-normal">{room.activeQuestion.mathResult.description}</p>
                       <div className="border-t border-emerald-950/50 pt-1 flex justify-between items-center text-[9px]">
-                        <span className="text-slate-400 font-sans">Search cells eliminated:</span>
+                        <span className="text-slate-400 font-sans">Search area eliminated:</span>
                         <span className="text-emerald-400 font-bold">-{room.activeQuestion.mathResult.eliminatedCount} cells</span>
                       </div>
                     </div>
@@ -1399,7 +1459,7 @@ export default function SeekerView({
                     <div className="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-left space-y-1">
                       <h4 className="text-[9px] font-black text-rose-400 uppercase tracking-wider font-sans">Question Vetoed</h4>
                       <p className="text-[10px] text-slate-300 leading-normal font-sans">
-                        Hiders used their Veto Powerup card. Questions of this type are now banned.
+                        Hiders used their Veto Powerup card. Questions of this category are now banned.
                       </p>
                     </div>
                   )}
@@ -1509,7 +1569,7 @@ export default function SeekerView({
           }`}
         >
           <Compass className="w-3.5 h-3.5" />
-          <span>Proximity Query</span>
+          <span>Ask Question</span>
         </button>
         <button
           onClick={() => { setActiveTab('STATUS'); audio.playClick(); }}
@@ -1518,22 +1578,22 @@ export default function SeekerView({
           }`}
         >
           <Shield className="w-3.5 h-3.5" />
-          <span>Tracking Status</span>
+          <span>Tracking & Apprehend</span>
         </button>
       </div>
 
       {activeTab === 'ASK' && (
         <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4">
           <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Select Query Type</label>
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Select Question Category</label>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { type: 'MATCHING', label: '1. Matching (POI)', vetoed: isVetoedMatching },
-                { type: 'MEASURING', label: '2. Measuring (Pin)', vetoed: isVetoedMeasuring },
-                { type: 'THERMOMETER', label: '3. Thermometer', vetoed: isVetoedThermometer },
-                { type: 'RADAR', label: '4. Radar (Circle)', vetoed: isVetoedRadar },
-                { type: 'TENTACLES', label: '5. Tentacles (Circle)', vetoed: isVetoedTentacles },
-                { type: 'PHOTO', label: '6. Photo', vetoed: isVetoedPhoto },
+                { type: 'MATCHING', label: '1. Matching Landmark', vetoed: isVetoedMatching },
+                { type: 'MEASURING', label: '2. Measuring Pin', vetoed: isVetoedMeasuring },
+                { type: 'THERMOMETER', label: '3. Thermometer Path', vetoed: isVetoedThermometer },
+                { type: 'RADAR', label: '4. Radar Circle', vetoed: isVetoedRadar },
+                { type: 'TENTACLES', label: '5. Tentacles Scan', vetoed: isVetoedTentacles },
+                { type: 'PHOTO', label: '6. Photo Clue', vetoed: isVetoedPhoto },
               ].map((item) => (
                 <button
                   key={item.type}
@@ -1569,9 +1629,9 @@ export default function SeekerView({
             {qType === null ? (
               <div className="text-center py-8 px-5 bg-slate-950/40 border border-slate-850/60 rounded-3xl space-y-2">
                 <Compass className="w-10 h-10 text-slate-700 mx-auto mb-2 animate-pulse" />
-                <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">No Query Type Selected</h4>
-                <p className="text-[10px] text-slate-500 max-w-[240px] mx-auto leading-relaxed">
-                  Select a proximity query type above to configure parameters, preview the live coverage on the map, and plan your next cut.
+                <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">No Question Selected</h4>
+                <p className="text-[10px] text-slate-500 max-w-[260px] mx-auto leading-relaxed">
+                  Select a question type above to configure parameters, preview the live coverage on the map, and narrow down the Hider's territory.
                 </p>
               </div>
             ) : (
@@ -1580,7 +1640,7 @@ export default function SeekerView({
                 {qType === 'MATCHING' && (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Select POI Type</label>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Select Landmark Type</label>
                       <select
                         value={matchingPoi}
                         onChange={(e) => {
@@ -1599,18 +1659,38 @@ export default function SeekerView({
                         })}
                       </select>
                     </div>
-                    <p className="text-[10px] text-slate-400 leading-normal">
-                      <b>Math:</b> Nearest-Neighbor / Voronoi territory. YES keeps Seeker's closest "{matchingPoi}" territory; NO eliminates only that territory.
-                    </p>
+                    <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-3 space-y-1.5 text-[10px] text-slate-300 text-left">
+                      <div className="flex items-center space-x-1.5 text-cyan-400 font-bold uppercase text-[9px]">
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>How Matching Works</span>
+                      </div>
+                      <p className="leading-normal">
+                        Asks if the Hider's closest <strong>{matchingPoi}</strong> is the exact same one as yours.
+                      </p>
+                      <ul className="space-y-0.5 text-slate-400 text-[9px]">
+                        <li>• <strong className="text-emerald-400">YES</strong> = Hider is in your local {matchingPoi} zone! All other areas are eliminated.</li>
+                        <li>• <strong className="text-rose-400">NO</strong> = Hider is near a different {matchingPoi}. Your local zone is eliminated.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
 
                 {/* MEASURING FORM */}
                 {qType === 'MEASURING' && (
                   <div className="space-y-3 text-left">
-                    <p className="text-[10px] text-slate-400 leading-normal">
-                      <b>Math:</b> Draws perpendicular bisector between Seeker and Pin. Keeps half-plane containing Hider.
-                    </p>
+                    <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-3 space-y-1.5 text-[10px] text-slate-300 text-left">
+                      <div className="flex items-center space-x-1.5 text-cyan-400 font-bold uppercase text-[9px]">
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>How Measuring Works</span>
+                      </div>
+                      <p className="leading-normal">
+                        Drop a <strong>Target Pin</strong> on the map. Asks if the Hider is closer to the Target Pin than to your team.
+                      </p>
+                      <ul className="space-y-0.5 text-slate-400 text-[9px]">
+                        <li>• <strong className="text-cyan-400">Closer to Pin</strong> = Eliminates the entire half of the map on your team's side.</li>
+                        <li>• <strong className="text-cyan-400">Closer to You</strong> = Eliminates the entire half of the map on the pin's side.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
 
@@ -1801,9 +1881,19 @@ export default function SeekerView({
                         </button>
                       </div>
                     )}
-                    <p className="text-[10px] text-slate-400 leading-normal">
-                      <b>Math:</b> Compares starting and ending proximity. Keeps Hotter/Colder bisector slice.
-                    </p>
+                    <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-3 space-y-1.5 text-[10px] text-slate-300 text-left">
+                      <div className="flex items-center space-x-1.5 text-cyan-400 font-bold uppercase text-[9px]">
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>How Thermometer Works</span>
+                      </div>
+                      <p className="leading-normal">
+                        Walk <strong>{thermometerDistance} miles</strong> along any route, then ask if you got Warmer (closer) or Colder (further).
+                      </p>
+                      <ul className="space-y-0.5 text-slate-400 text-[9px]">
+                        <li>• <strong className="text-orange-400">🔥 Hotter</strong> = You walked towards the Hider! Eliminates the area behind where you started.</li>
+                        <li>• <strong className="text-blue-400">❄️ Colder</strong> = You moved further away! Eliminates the area ahead in your walking direction.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
 
@@ -1846,9 +1936,19 @@ export default function SeekerView({
                         </option>
                       </select>
                     </div>
-                    <p className="text-[10px] text-slate-400 leading-normal">
-                      <b>Math:</b> Boolean intersection. Yes = restricts search inside circle. No = subtracts circle.
-                    </p>
+                    <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-3 space-y-1.5 text-[10px] text-slate-300 text-left">
+                      <div className="flex items-center space-x-1.5 text-cyan-400 font-bold uppercase text-[9px]">
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>How Radar Works</span>
+                      </div>
+                      <p className="leading-normal">
+                        Asks if the Hider is hiding within a <strong>{radarDistance} mile</strong> radius circle around your team.
+                      </p>
+                      <ul className="space-y-0.5 text-slate-400 text-[9px]">
+                        <li>• <strong className="text-emerald-400">YES (Inside)</strong> = Hider is inside! Everything outside the {radarDistance} mi circle is eliminated.</li>
+                        <li>• <strong className="text-rose-400">NO (Outside)</strong> = Hider is outside! The entire {radarDistance} mi circle around you is eliminated.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
 
@@ -1857,7 +1957,7 @@ export default function SeekerView({
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">POI Type</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Landmark Type</label>
                         <select
                           value={tentaclePoi}
                           onChange={(e) => {
@@ -1881,7 +1981,7 @@ export default function SeekerView({
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Radius (Miles)</label>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Search Radius (Miles)</label>
                         <select
                           value={tentacleDistance}
                           onChange={(e) => {
@@ -1895,9 +1995,19 @@ export default function SeekerView({
                         </select>
                       </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 leading-normal">
-                      <b>Math:</b> Outside = circle eliminated. Inside = restricts search to circle, then isolates nearest POI Voronoi cell.
-                    </p>
+                    <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-3 space-y-1.5 text-[10px] text-slate-300 text-left">
+                      <div className="flex items-center space-x-1.5 text-cyan-400 font-bold uppercase text-[9px]">
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>How Tentacles Works</span>
+                      </div>
+                      <p className="leading-normal">
+                        Scans a <strong>{tentacleDistance} mile</strong> circle for the Hider. If they are inside, identifies which <strong>{tentaclePoi}</strong> landmark they are closest to.
+                      </p>
+                      <ul className="space-y-0.5 text-slate-400 text-[9px]">
+                        <li>• <strong className="text-emerald-400">Inside Circle</strong> = Pinpoints the exact {tentaclePoi} zone where the Hider is hiding!</li>
+                        <li>• <strong className="text-rose-400">Outside Circle</strong> = Eliminates the entire {tentacleDistance} mi circle around you.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
 
@@ -1924,9 +2034,19 @@ export default function SeekerView({
                         })}
                       </select>
                     </div>
-                    <p className="text-[10px] text-slate-400 leading-normal">
-                      <b>Task:</b> Hiders must take and send a photograph of this subject. Safe to download and verify.
-                    </p>
+                    <div className="bg-slate-950/80 border border-cyan-500/20 rounded-xl p-3 space-y-1.5 text-[10px] text-slate-300 text-left">
+                      <div className="flex items-center space-x-1.5 text-cyan-400 font-bold uppercase text-[9px]">
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>How Photo Clues Work</span>
+                      </div>
+                      <p className="leading-normal">
+                        Requests a real camera photograph of <strong>"{photoSubject}"</strong> from where the Hiders are hiding.
+                      </p>
+                      <ul className="space-y-0.5 text-slate-400 text-[9px]">
+                        <li>• Gives visual scenery clues (buildings, terrain, skyline) to help deduce their location.</li>
+                        <li>• You can save and inspect the photo in full resolution to guide your search.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
 
@@ -1934,7 +2054,7 @@ export default function SeekerView({
                   onClick={handlePreview}
                   className="w-full py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-2xl font-black text-xs tracking-wider uppercase transition-transform active:scale-[0.99] cursor-pointer"
                 >
-                  🔍 Preview Query on Map
+                  🔍 Preview Question on Map
                 </button>
               </>
             )}

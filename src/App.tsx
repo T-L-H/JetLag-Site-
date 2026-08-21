@@ -452,11 +452,24 @@ export default function App() {
 
   const handleAnswerQuestion = async (answerValue: boolean | string, photoUrl?: string) => {
     if (!roomCode) return;
-    await fetch(`/api/rooms/${roomCode}/answer-question`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ answerValue, photoUrl }),
-    });
+    try {
+      const res = await fetch(`/api/rooms/${roomCode}/answer-question`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answerValue, photoUrl }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setRoom(updated);
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed to answer question' }));
+        console.error('Failed to answer question:', err);
+        alert(err.error || 'Failed to answer question');
+      }
+    } catch (e) {
+      console.error('Error submitting answer:', e);
+      alert('Network error while sending answer. Please check your connection and try again.');
+    }
   };
 
   const handleClearQuestion = async () => {

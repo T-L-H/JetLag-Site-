@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, RoomState, ActiveQuestion, ActiveCurse } from '../types';
-import { Shield, Sparkles, MapPin, CheckCircle, Flame, Eye, EyeOff, Camera, RefreshCw, Layers, Check, X, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Shield, Sparkles, MapPin, CheckCircle, Flame, Eye, EyeOff, Camera, RefreshCw, Layers, Check, X, AlertTriangle, HelpCircle, Loader2 } from 'lucide-react';
 import audio from '../lib/audio';
 import { getCurseDiscardRequirement, getBonusMinutesForSize } from '../lib/cardsData';
 
@@ -275,7 +275,7 @@ function evaluateActiveQuestion(room: RoomState): EvaluationResult | null {
           <p>• Your distance to Seeker: <span className="text-emerald-400 font-mono font-bold">{distToSeeker.toFixed(2)} mi</span> (Inside!)</p>
           <p>• Your closest "{targetCategory}" landmark: <span className="text-amber-400 font-bold">{hiderClosest.name}</span> ({minHiderDist.toFixed(2)} mi)</p>
           <p className="text-[10px] text-slate-400 mt-1">
-            ✅ The map will restrict search to your Voronoi cell for this landmark.
+            ✅ The Seekers' map will narrow down to your local landmark zone.
           </p>
         </div>
       )
@@ -412,6 +412,7 @@ export default function HiderView({
   // Photo Question Upload State
   const [photoBase64, setPhotoBase64] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+  const [sendingPhoto, setSendingPhoto] = useState(false);
 
   // Card Draft choices selection state
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
@@ -485,14 +486,38 @@ export default function HiderView({
     return () => clearInterval(interval);
   }, [catchPressed, onCatchHider]);
 
-  const compressImage = (file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.82): Promise<string> => {
+  const compressImage = (file: File, maxWidth = 720, maxHeight = 720, quality = 0.65): Promise<string> => {
     return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onerror = () => resolve('');
-      reader.onload = (readerEvent) => {
-        const img = new window.Image();
-        img.onerror = () => resolve(readerEvent.target?.result as string || '');
-        img.onload = () => {
+      let objectUrl = '';
+      try {
+        objectUrl = URL.createObjectURL(file);
+      } catch (e) {
+        // Fallback to FileReader if createObjectURL is unavailable
+        const reader = new FileReader();
+        reader.onload = (e) => resolve((e.target?.result as string) || '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const img = new window.Image();
+      const cleanup = () => {
+        try {
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+        } catch (_) {}
+      };
+
+      img.onerror = () => {
+        cleanup();
+        // Fallback to FileReader
+        const reader = new FileReader();
+        reader.onload = (e) => resolve((e.target?.result as string) || '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
+      };
+
+      img.onload = () => {
+        try {
           let width = img.width;
           let height = img.height;
 
@@ -511,16 +536,23 @@ export default function HiderView({
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           if (!ctx) {
-            resolve(readerEvent.target?.result as string || '');
+            cleanup();
+            resolve('');
             return;
           }
+
           ctx.drawImage(img, 0, 0, width, height);
           const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          cleanup();
           resolve(dataUrl);
-        };
-        img.src = (readerEvent.target?.result as string) || '';
+        } catch (err) {
+          console.error('Error drawing image onto canvas:', err);
+          cleanup();
+          resolve('');
+        }
       };
-      reader.readAsDataURL(file);
+
+      img.src = objectUrl;
     });
   };
 
@@ -539,6 +571,8 @@ export default function HiderView({
       console.error('Error compressing photo:', err);
     } finally {
       setUploading(false);
+      // Reset input value so user can re-select if needed
+      e.target.value = '';
     }
   };
 
@@ -990,7 +1024,7 @@ export default function HiderView({
       {/* TAB 2: PENDING QUESTIONS FROM SEEKERS */}
       {activeTab === 'QUESTIONS' && (
         <div className="space-y-4">
-          <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1">Active Seeker Proximity Query</span>
+          <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1">Incoming Question from Seekers</span>
 
           {room.activeQuestion && room.activeQuestion.status === 'PENDING' ? (
             <div className="bg-slate-900 border border-amber-500/20 rounded-3xl p-5 shadow-2xl space-y-4 relative overflow-hidden">
@@ -1008,17 +1042,17 @@ export default function HiderView({
               <div>
                 <h3 className="text-sm font-black text-slate-100">{room.activeQuestion.title}</h3>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  Type: <span className="text-slate-300 font-semibold">{room.activeQuestion.type}</span>
+                  Category: <span className="text-slate-300 font-semibold">{room.activeQuestion.type}</span>
                 </p>
               </div>
 
-              {/* Map Cut Math Estimate */}
+              {/* Map Elimination Estimate */}
               <div className="bg-slate-950/80 border border-slate-850 p-3 rounded-xl flex items-center space-x-3 text-left">
                 <Layers className="w-5 h-5 text-amber-400 shrink-0" />
                 <div>
-                  <h4 className="text-[10px] font-bold text-amber-300">Potential Geospatial Cut Estimate</h4>
+                  <h4 className="text-[10px] font-bold text-amber-300">Map Elimination Estimate</h4>
                   <p className="text-[9px] text-slate-400 leading-relaxed mt-0.5">
-                    This answer will slice away approximately 30-55% of the remaining search grid from the Seekers.
+                    Answering this question will eliminate approximately 30-55% of the remaining search area for Seekers, and award your team new bonus cards!
                   </p>
                 </div>
               </div>
@@ -1027,7 +1061,7 @@ export default function HiderView({
               <div className="space-y-3 pt-3 border-t border-slate-850">
                 {room.activeQuestion.type === 'PHOTO' ? (
                   <div className="space-y-3">
-                    <span className="block text-[10px] font-bold text-slate-400">Upload Native Subject Photograph:</span>
+                    <span className="block text-[10px] font-bold text-slate-400">Take & Upload Photo of Subject:</span>
                     <div className="flex items-center space-x-3">
                       <input
                         type="file"
@@ -1042,7 +1076,7 @@ export default function HiderView({
                         className="flex-1 py-2 px-3 bg-slate-950 border border-slate-850 hover:border-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer"
                       >
                         <Camera className="w-4 h-4 text-rose-400" />
-                        <span>{uploading ? 'Processing...' : photoBase64 ? 'Retake Photo' : 'Capture / Upload Photo'}</span>
+                        <span>{uploading ? 'Processing...' : photoBase64 ? 'Retake Photo' : 'Take / Upload Photo'}</span>
                       </label>
                     </div>
 
@@ -1059,20 +1093,34 @@ export default function HiderView({
                     )}
 
                     <button
-                      onClick={() => {
-                        if (!photoBase64) return;
-                        onAnswerQuestion(true, photoBase64);
-                        setPhotoBase64('');
-                        audio.playSuccess();
+                      onClick={async () => {
+                        if (!photoBase64 || sendingPhoto) return;
+                        setSendingPhoto(true);
+                        try {
+                          await onAnswerQuestion(true, photoBase64);
+                          setPhotoBase64('');
+                          audio.playSuccess();
+                        } catch (err) {
+                          console.error('Failed to send photo:', err);
+                        } finally {
+                          setSendingPhoto(false);
+                        }
                       }}
-                      disabled={!photoBase64}
-                      className={`w-full py-2 rounded-xl text-xs font-black shadow transition-all ${
-                        photoBase64
-                          ? 'bg-rose-500 hover:bg-rose-400 text-slate-950 cursor-pointer'
+                      disabled={!photoBase64 || sendingPhoto}
+                      className={`w-full py-2.5 rounded-xl text-xs font-black shadow transition-all flex items-center justify-center space-x-2 ${
+                        photoBase64 && !sendingPhoto
+                          ? 'bg-rose-500 hover:bg-rose-400 text-slate-950 cursor-pointer shadow-rose-500/20'
                           : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-750'
                       }`}
                     >
-                      📤 Send Uploaded Photo
+                      {sendingPhoto ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-slate-950" />
+                          <span>Sending Photo to Seekers...</span>
+                        </>
+                      ) : (
+                        <span>📤 Send Photo</span>
+                      )}
                     </button>
                   </div>
                 ) : (() => {
@@ -1086,7 +1134,7 @@ export default function HiderView({
                           <div className="flex items-center space-x-2">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                             <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-400">
-                              Automated Geospatial Calculation
+                              Calculated GPS Answer
                             </span>
                           </div>
                           

@@ -981,15 +981,15 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
 
   let description = '';
 
-  // Execute Geospatial Cutting
+  // Execute Map Search Area Elimination
   if (q.type === 'MATCHING') {
     const isYes = answerValue === true;
     const targetCategory = q.poiType || '';
     const pois = room.pois && room.pois.length > 0 ? room.pois : generateDynamicPOIs(room.centerLat, room.centerLng, room.radiusMiles);
     room.grid = cutMatching(room.grid, pois, isYes, seekerLat, seekerLng, targetCategory);
     description = isYes
-      ? `Matching "${targetCategory}": YES. Kept Seeker's nearest ${targetCategory} territory; eliminated others.`
-      : `Matching "${targetCategory}": NO. Eliminated Seeker's nearest ${targetCategory} territory; kept the rest intact.`;
+      ? `Matching "${targetCategory}": YES! The Hider is in your nearest ${targetCategory} zone. All other areas eliminated.`
+      : `Matching "${targetCategory}": NO. The Hider is near a different ${targetCategory}. Your local zone was eliminated.`;
   } else if (q.type === 'MEASURING') {
     if (q.customPin) {
       room.grid = cutMeasuring(
@@ -1001,7 +1001,10 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
         hiderLat,
         hiderLng
       );
-      description = `Measuring Question resolved. Sliced by perpendicular bisector containing Hider.`;
+      const dPin = getDistance(hiderLat, hiderLng, q.customPin.lat, q.customPin.lng);
+      const dSeeker = getDistance(hiderLat, hiderLng, seekerLat, seekerLng);
+      const closerTo = dPin < dSeeker ? 'Target Pin' : 'your team';
+      description = `Measuring Question: Hider is closer to ${closerTo}! The far half of the search area was eliminated.`;
     }
   } else if (q.type === 'THERMOMETER') {
     const isHotter = answerValue === true;
@@ -1014,13 +1017,13 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
         q.endPin.lng,
         isHotter
       );
-      description = `Thermometer Question answered: ${isHotter ? 'HOTTER' : 'COLDER'}. Sliced accordingly.`;
+      description = `Thermometer: ${isHotter ? '🔥 HOTTER! You moved closer to the Hider as you walked.' : '❄️ COLDER! You moved further away from the Hider.'} Search area updated.`;
     }
   } else if (q.type === 'RADAR') {
     const isYes = answerValue === true;
     if (q.distanceValue !== undefined) {
       room.grid = cutRadar(room.grid, seekerLat, seekerLng, q.distanceValue, isYes);
-      description = `Radar Question answered: ${isYes ? 'YES (Within)' : 'NO (Outside)'}. Circle of ${q.distanceValue} mi cut.`;
+      description = `Radar Question answered: ${isYes ? `YES! Hider is within ${q.distanceValue} miles of you. Area outside circle eliminated.` : `NO! Hider is NOT within ${q.distanceValue} miles of you. The ${q.distanceValue} mi circle was eliminated.`}`;
     }
   } else if (q.type === 'TENTACLES') {
     if (q.distanceValue !== undefined) {
@@ -1035,10 +1038,10 @@ app.post('/api/rooms/:code/answer-question', (req, res) => {
         pois
       );
       room.grid = result.grid;
-      description = `Tentacle Question resolved: ${result.hiderStatusDesc}`;
+      description = `Tentacles Question resolved: ${result.hiderStatusDesc}`;
     }
   } else if (q.type === 'PHOTO') {
-    description = `Photo Question completed with photo of "${q.selectedSubject}".`;
+    description = `Photo Question completed: Hider submitted a real-life photo of "${q.selectedSubject}".`;
   }
 
   // Safeguard: Ensure the hider's representative active cell is never eliminated due to discretization/quantization mismatches
